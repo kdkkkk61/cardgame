@@ -33,14 +33,14 @@ namespace CarDungeon
                 new Color(0.16f, 0.17f, 0.21f), new Vector3(0, 0, 1), 1f, -10)
                 .transform.localScale = new Vector3(16.5f, 9.2f, 1f);
 
-            // --- 플레이어 (마법사) ---
+            // --- 플레이어 (마법사) — 목업 보라 톤 ---
             var playerGo = ProtoSprites.Make("Player", ProtoSprites.Circle(),
-                new Color(0.45f, 0.8f, 1f), new Vector3(0, -2.5f, 0), 0.7f, 5);
+                new Color(0.62f, 0.52f, 0.88f), new Vector3(0, -2f, 0), 0.62f, 5);
             var player = playerGo.AddComponent<PlayerController>();
 
-            // --- 보스 ---
+            // --- 보스 — 목업 빨강 톤 ---
             var bossGo = ProtoSprites.Make("Boss", ProtoSprites.Square(),
-                new Color(0.85f, 0.4f, 0.4f), new Vector3(0, 2.8f, 0), 1.3f, 5);
+                new Color(0.75f, 0.32f, 0.31f), new Vector3(0, 2.8f, 0), 1.1f, 5);
             var boss = bossGo.AddComponent<Boss>();
 
             // --- 매니저 + HUD ---
