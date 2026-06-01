@@ -1,0 +1,44 @@
+# ===== Unity =====
+# 자동 생성/캐시 폴더 (절대 커밋하면 안 됨 — 수 GB)
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+
+# Asset meta 파일은 커밋해야 함 (제외하지 말 것!)
+
+# Visual Studio / Rider / VS Code 생성물
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Unity3D 빌드 산출물
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# 크래시 리포트
+sysinfo.txt
+crashlytics-build.properties
+
+# OS 생성 파일
+.DS_Store
+Thumbs.db
