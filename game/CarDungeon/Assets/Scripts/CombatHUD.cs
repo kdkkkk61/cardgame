@@ -24,12 +24,30 @@ namespace CarDungeon
         static readonly Color C_panel   = new Color(0.078f, 0.063f, 0.102f, 0.72f);
 
         GUIStyle _num, _lbl, _dim, _big, _cardName, _badge;
+        static Font _font;
         bool _init;
         int _hover = -1;
+
+        // FX 상태
+        struct DmgPop { public int val; public Vector3 world; public float age; }
+        readonly System.Collections.Generic.List<DmgPop> _pops = new();
+        float _castPulse = 0f;
+        bool _subscribed;
+        int _sortMode = 0; // 0=드로우순 1=코스트순 2=타입순
 
         void Update()
         {
             if (mgr == null) return;
+            EnsureSubscribed();
+
+            // FX 수명 갱신
+            if (_castPulse > 0f) _castPulse -= Time.deltaTime * 2.2f;
+            for (int i = _pops.Count - 1; i >= 0; i--)
+            {
+                var p = _pops[i]; p.age += Time.deltaTime; _pops[i] = p;
+                if (p.age > 1.1f) _pops.RemoveAt(i);
+            }
+
             var kb = Keyboard.current;
             if (kb != null && mgr.state == CombatState.Fighting)
             {
@@ -44,9 +62,26 @@ namespace CarDungeon
                     UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
         }
 
+        void EnsureSubscribed()
+        {
+            if (_subscribed || mgr == null) return;
+            mgr.onDamageDealt += OnDamage;
+            mgr.onCardCast += OnCast;
+            _subscribed = true;
+        }
+        void OnDamage(int dmg)
+        {
+            if (mgr.boss != null)
+                _pops.Add(new DmgPop { val = dmg, world = mgr.boss.transform.position, age = 0f });
+        }
+        void OnCast() { _castPulse = 1f; }
+
         void EnsureStyles()
         {
             if (_init) return;
+            if (_font == null)
+                _font = Font.CreateDynamicFontFromOSFont(
+                    new[] { "Malgun Gothic", "맑은 고딕", "Segoe UI", "Arial" }, 16);
             _num = Style(16, FontStyle.Bold, C_ink);
             _lbl = Style(11, FontStyle.Normal, C_inkDim);
             _dim = Style(10, FontStyle.Normal, C_inkDim);
@@ -56,7 +91,7 @@ namespace CarDungeon
             _init = true;
         }
         static GUIStyle Style(int size, FontStyle fs, Color col)
-            => new GUIStyle { fontSize = size, fontStyle = fs, normal = { textColor = col }, richText = true };
+            => new GUIStyle { font = _font, fontSize = size, fontStyle = fs, normal = { textColor = col }, richText = true };
 
         void OnGUI()
         {
@@ -72,6 +107,7 @@ namespace CarDungeon
             DrawCost(H);              // 좌하
             DrawHand(W, H);           // 하단 중앙 (부채꼴)
             DrawDeckArea(W, H);       // 하단 우
+            DrawFX();                 // 데미지 숫자 / 시전 펄스
             DrawLog(W, H);
             DrawResult(W, H);
         }
@@ -203,7 +239,7 @@ namespace CarDungeon
             if (n == 0) { _hover = -1; return; }
 
             const float CH = 144, SP = 64, STEP = 5f;
-            float baseY = H - CH - 6;
+            float baseY = H - CH + 26; // 목업처럼 살짝 아래로
             float mid = (n - 1) / 2f;
             Vector2 mouse = Event.current.mousePosition;
 
@@ -296,11 +332,15 @@ namespace CarDungeon
         {
             float x = W - 70, y = H - 100;
             string[] s = { "A", "B", "C" };
+            string[] tip = { "드로우순", "코스트순", "타입순" };
             for (int i = 0; i < 3; i++)
             {
                 var r = new Rect(x + i * 24, y, 22, 22);
-                DrawTex(r, Tex.White(), C_panel);
-                GUI.Label(r, s[i], new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter });
+                bool on = _sortMode == i;
+                DrawTex(r, Tex.White(), on ? new Color(0.29f, 0.25f, 0.34f) : C_panel);
+                GUI.Label(r, s[i], new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = on ? C_ink : C_inkDim } });
+                if (GUI.Button(r, new GUIContent("", tip[i]), GUIStyle.none)) SortHand(i);
             }
             var pile = new Rect(x, y + 28, 54, 70);
             DrawTex(pile, Tex.Round(), new Color(0.169f, 0.141f, 0.200f));
@@ -309,6 +349,46 @@ namespace CarDungeon
                 $"덱 {mgr.deck.Count}", new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter });
             GUI.Label(new Rect(pile.x, pile.y + 40, pile.width, 16),
                 $"무덤 {mgr.discard.Count}", new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter });
+        }
+
+        void SortHand(int mode)
+        {
+            _sortMode = mode;
+            if (mode == 1)
+                mgr.hand.Sort((a, b) => a.cost != b.cost ? a.cost.CompareTo(b.cost) : a.drawSeq.CompareTo(b.drawSeq));
+            else if (mode == 2)
+                mgr.hand.Sort((a, b) => a.type != b.type ? a.type.CompareTo(b.type) : a.drawSeq.CompareTo(b.drawSeq));
+            else
+                mgr.hand.Sort((a, b) => a.drawSeq.CompareTo(b.drawSeq));
+        }
+
+        // ── 데미지 숫자 / 시전 펄스 ──
+        void DrawFX()
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+
+            // 시전 펄스: 플레이어 둘레 확장 링
+            if (_castPulse > 0f && mgr.player != null)
+            {
+                Vector3 sp = cam.WorldToScreenPoint(mgr.player.transform.position);
+                float y = Screen.height - sp.y;
+                float t = 1f - _castPulse;
+                float rad = Mathf.Lerp(30f, 70f, t);
+                DrawTex(new Rect(sp.x - rad, y - rad, rad * 2, rad * 2), Tex.Ring(),
+                    new Color(0.62f, 0.52f, 0.88f, _castPulse * 0.7f));
+            }
+
+            // 데미지 숫자: 보스 위로 떠오르며 페이드
+            foreach (var p in _pops)
+            {
+                Vector3 sp = cam.WorldToScreenPoint(p.world);
+                float y = Screen.height - sp.y - 40f - p.age * 36f;
+                float a = Mathf.Clamp01(1.1f - p.age);
+                GUI.Label(new Rect(sp.x - 40, y, 80, 28), $"{p.val}",
+                    new GUIStyle(_big) { alignment = TextAnchor.MiddleCenter,
+                        normal = { textColor = new Color(1f, 0.85f, 0.4f, a) } });
+            }
         }
 
         void DrawLog(float W, float H)

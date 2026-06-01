@@ -27,6 +27,7 @@ namespace CarDungeon
         public float slowSeconds; // 냉기폭발/메테오 슬로우
 
         public string desc;      // 손패 호버 표시용
+        public int drawSeq;      // 드로우순 정렬용
 
         public CardData(string name, CardType type, int cost, float castTime,
             CardShape shape, bool aimed, string desc)

@@ -13,12 +13,28 @@ namespace CarDungeon
 
         public float slowTimer = 0f; // 냉기폭발/메테오 슬로우 잔여(초)
 
-        void Awake() { hp = maxHP; }
+        SpriteRenderer _sr;
+        Color _baseColor;
+        float _flash = 0f;
+
+        void Awake()
+        {
+            hp = maxHP;
+            _sr = GetComponent<SpriteRenderer>();
+            if (_sr != null) _baseColor = _sr.color;
+        }
 
         void Update()
         {
             if (slowTimer > 0f) slowTimer -= Time.deltaTime;
+            if (_flash > 0f && _sr != null)
+            {
+                _flash -= Time.deltaTime * 4f;
+                _sr.color = Color.Lerp(_baseColor, Color.white, Mathf.Clamp01(_flash));
+            }
         }
+
+        public void Flash() { _flash = 1f; }
 
         public void TakeDamage(int dmg)
         {

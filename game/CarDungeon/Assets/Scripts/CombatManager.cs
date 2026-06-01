@@ -40,6 +40,11 @@ namespace CarDungeon
         public Boss boss;
         public string lastLog = "";
 
+        // FX 이벤트 (HUD가 구독)
+        public event System.Action<int> onDamageDealt; // 보스 피격 데미지
+        public event System.Action onCardCast;         // 카드 사용 순간
+        int _drawCounter = 0;
+
         public void Init(PlayerController player, Boss boss)
         {
             this.player = player;
@@ -119,6 +124,7 @@ namespace CarDungeon
                     discard.Add(deck[0]); deck.RemoveAt(0);
                     continue;
                 }
+                deck[0].drawSeq = _drawCounter++; // 드로우순 정렬용
                 hand.Add(deck[0]); deck.RemoveAt(0);
             }
         }
@@ -133,6 +139,7 @@ namespace CarDungeon
 
             cost -= c.cost;
             hand.RemoveAt(handIndex);
+            onCardCast?.Invoke();        // 시전 손맛 피드백
 
             if (c.castTime <= 0f)
                 ResolveCard(c);          // 즉발
@@ -142,10 +149,30 @@ namespace CarDungeon
 
         void ResolveCard(CardData c)
         {
-            if (c.damage > 0 && boss != null) boss.TakeDamage(c.damage);
             if (c.absorb > 0) barrier += c.absorb;
             if (c.drawCount > 0) DrawCards(c.drawCount);
-            if (c.slowSeconds > 0 && boss != null) boss.ApplySlow(c.slowSeconds);
+
+            if (c.damage > 0 && boss != null)
+            {
+                int dmg = c.damage;
+                float slow = c.slowSeconds;
+                Vector3 from = player != null ? player.transform.position : Vector3.zero;
+                Color col = c.type == CardType.Attack
+                    ? new Color(1f, 0.55f, 0.45f) : new Color(0.55f, 0.82f, 1f);
+                // 투사체 도달 시 데미지/슬로우/플래시 적용 (낙하감)
+                Projectile.Spawn(from, boss.transform.position, col, 16f, () =>
+                {
+                    if (boss == null) return;
+                    boss.TakeDamage(dmg);
+                    if (slow > 0) boss.ApplySlow(slow);
+                    boss.Flash();
+                    onDamageDealt?.Invoke(dmg);
+                });
+            }
+            else if (c.slowSeconds > 0 && boss != null)
+            {
+                boss.ApplySlow(c.slowSeconds);
+            }
             discard.Add(c);
         }
 
