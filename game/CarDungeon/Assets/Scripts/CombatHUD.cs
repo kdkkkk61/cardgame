@@ -202,7 +202,7 @@ namespace CarDungeon
             int n = mgr.hand.Count;
             if (n == 0) { _hover = -1; return; }
 
-            const float CW = 104, CH = 144, SP = 64, STEP = 5f;
+            const float CH = 144, SP = 64, STEP = 5f;
             float baseY = H - CH - 6;
             float mid = (n - 1) / 2f;
             Vector2 mouse = Event.current.mousePosition;

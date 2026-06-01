@@ -12,7 +12,7 @@ namespace CarDungeon
         static void Boot()
         {
             // 이미 생성됐으면 스킵(중복 방지)
-            if (Object.FindFirstObjectByType<CombatManager>() != null) return;
+            if (Object.FindAnyObjectByType<CombatManager>() != null) return;
 
             // --- 카메라 (탑다운 직교) ---
             var cam = Camera.main;
