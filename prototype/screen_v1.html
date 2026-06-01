@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>마법사 프로토타입 — 정적 화면 v1</title>
+
+<!--
+================================================================================
+  마법사 Phase 2.5 프로토타입 — 정적 화면 v1 (로직 없음, 배치만)
+================================================================================
+  출처 문서: MAGE_PROTOTYPE.md / CORE_COMBAT.md / CARDS.md / CLAUDE_카드게임.md §5
+
+  ★ 이 파일의 목적:
+    - "spec만으로는 화면이 안 나온다" → 실제 배치를 눈으로 확정하기 위한 1단계.
+    - 이 HTML이 버려지는 목업이 아니라, 이후 시간/이동/카드 로직을 얹을 "뼈대".
+    - 목업만 만들면 의도가 증발해 문제가 반복됨 → 각 영역에 "왜 이렇게"를 주석으로 박음.
+
+  ★★ 상태(2026-05-31): 이 구성을 "최소 정보 baseline"으로 확정.
+      게임 전투 화면은 최소 이만큼은 항상 나와야 함 (구성 목록 = MAGE_PROTOTYPE.md).
+      남은 아쉬움: 자동명중(확정타) 텔레그래프 표현 — 현재는 캐릭터 빨간 펄스 링.
+      더 좋은 표현 여지 있음(개선 후보, 추후). 비율(요소 크기 배분)은 별도 단계에서 조정.
+
+  ★ 화면 대원칙 (CLAUDE §5):
+    - 하단 UI 박스 없음 — 투명. 카드/HP/코스트가 "전장 위에 떠 있음".
+    - 75% 전장 / 25% UI 느낌이되, UI는 불투명 패널이 아니라 전장에 얹힌 오버레이.
+    - 16:9 고정. 카메라 클램프드 탑다운(코어키퍼식) — 여기선 정지된 한 컷.
+
+  ★ 이 컷이 표현하는 "게임 순간":
+    - 보스가 패턴 B(화염 장판=회피가능)를 예고 중 (시간 게이지 8초 중 5초 경과).
+    - 플레이어는 방금 메테오(3코)+체인라이트닝(2코)=5코를 시전해 큐에 2개가 병렬로 돌고 있음.
+    - 따라서 현재 코스트 0/5 (다 씀) → 손패에 카드 있어도 못 냄 = 다음 사이클 대기.
+    - 이게 "큐=시전중 표시용"과 "코스트=사이클 자원"을 한 컷에 보여주는 의도.
+================================================================================
+-->
+
+<style>
+  /* ─── 팔레트: 던전 크롤러 톤 (어두운 배경 + 분류색 네온 악센트) ─── */
+  :root {
+    --bg-floor:   #1b1822;   /* 전장 바닥 */
+    --bg-floor2:  #241f2e;
+    --atk:        #e0524d;   /* 공격 = 빨강 (CARDS §2 색축) */
+    --skill:      #4d8fe0;   /* 스킬 = 파랑 */
+    --power:      #e0c24d;   /* 파워 = 노랑 (이 셋엔 없음, 범례용) */
+    --hp:         #57c46a;
+    --barrier:    #8fb7d6;
+    --danger:     #e0524d;
+    --ink:        #f2eef7;
+    --ink-dim:    #9b94a8;
+    --aim:        #54d6d0;   /* 메테오 조준 영역 */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d0b12;
+    color: var(--ink);
+    font-family: "Pretendard", "맑은 고딕", system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 24px; gap: 16px;
+  }
+
+  /* ─── 16:9 스테이지 = 게임 전체 화면 ─── */
+  .stage {
+    position: relative;
+    width: min(960px, 96vw);
+    aspect-ratio: 16 / 9;
+    background:
+      radial-gradient(120% 90% at 50% 35%, var(--bg-floor2) 0%, var(--bg-floor) 70%, #120f18 100%);
+    border: 1px solid #322b3e;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0,0,0,.5);
+    /* 바닥 격자(코어키퍼식 탑다운 느낌) */
+    background-image:
+      radial-gradient(120% 90% at 50% 35%, var(--bg-floor2) 0%, var(--bg-floor) 70%, #120f18 100%),
+      repeating-linear-gradient(0deg, transparent 0 47px, rgba(255,255,255,.02) 47px 48px),
+      repeating-linear-gradient(90deg, transparent 0 47px, rgba(255,255,255,.02) 47px 48px);
+  }
+
+  /*
+    ─── [전장 요소] 회피가능 장판 (패턴 B 예고) ───────────────────────────
+    의도: 회피가능 공격은 "바닥에 빨간 영역"으로 예고 (CORE_COMBAT §5).
+          자동명중(캐릭터에 직접 표시)과 시각적으로 명확히 구분되어야 함.
+          → 영역 밖으로 무빙하면 0 데미지. 이게 무빙 검증의 핵심 표적.
+  */
+  .floor-aoe {
+    position: absolute; left: 38%; top: 46%;
+    width: 220px; height: 130px; transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(224,82,77,.28), rgba(224,82,77,.10) 70%, transparent);
+    border: 2px dashed rgba(224,82,77,.7);
+  }
+  .floor-aoe::after {
+    content: "🔥 화염 장판 (회피가능 · 영역 밖 안전)";
+    position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%);
+    font-size: 11px; color: #e89a97; white-space: nowrap;
+  }
+
+  /*
+    ─── [전장 요소] 메테오 조준 영역 (큐에서 시전 중인 조준 카드) ──────────
+    의도: 조준 카드(점O)는 사용 시 화면에 "내가 깔 영역"을 표시 (CARDS §2).
+          "보스가 바닥에 장판 깔듯, 마법사도 자기 공격을 바닥에 예고" (CLASSES §2).
+          → 슬로우를 안 걸면 보스가 이 원을 빠져나가 헛방 = 수싸움 학습.
+          색을 적 장판(빨강)과 다르게(청록) 해서 "내 것 vs 적 것" 구분.
+  */
+  .aim-zone {
+    position: absolute; left: 60%; top: 40%;
+    width: 150px; height: 90px; transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(84,214,208,.20), transparent 72%);
+    border: 2px solid rgba(84,214,208,.85);
+  }
+  .aim-zone::after {
+    content: "☄️ 메테오 낙하 예정";
+    position: absolute; left: 50%; top: -20px; transform: translateX(-50%);
+    font-size: 11px; color: var(--aim); white-space: nowrap;
+  }
+
+  /*
+    ─── [전장 요소] 플레이어 캐릭터 (중앙) ────────────────────────────────
+    의도: 카메라가 따라다니므로 캐릭터는 거의 중앙 고정 (CLAUDE §5).
+          마법사는 거리 무관 필중 → 무빙은 "회피 전용"(CORE_COMBAT §6 수정분).
+  */
+  .player {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 46px; height: 46px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #b9a3e8, #6b4fb0);
+    border: 2px solid #d9ccff;
+    display: grid; place-items: center; font-size: 22px;
+    box-shadow: 0 0 18px rgba(150,110,230,.5);
+  }
+  .player::after {
+    content: "내 캐릭터"; position: absolute; bottom: -18px; left: 50%;
+    transform: translateX(-50%); font-size: 10px; color: var(--ink-dim); white-space: nowrap;
+  }
+
+  /*
+    ─── [전장 요소] 자동명중(확정 공격) 텔레그래프 ────────────────────────
+    의도: 자동명중은 못 피함 → 바닥 영역이 아니라 "캐릭터에 직접" 표시 (CORE_COMBAT §5).
+          캐릭터를 조이는 빨간 펄스 링 = "확정타 들어온다, 무빙 소용없음, 방어 카드로 흡수".
+          회피가능(바닥 빨간 영역)과 명확히 구분 — 바닥이냐 캐릭터냐.
+          HP 미리보기(좌상단)의 빨간 점멸 구간과 한 쌍으로 읽힘.
+  */
+  .autohit {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 84px; height: 84px; border-radius: 50%;
+    border: 2px dashed var(--danger);
+    box-shadow: inset 0 0 16px rgba(224,82,77,.45), 0 0 10px rgba(224,82,77,.3);
+    animation: ahpulse 1.1s ease-in-out infinite; pointer-events: none;
+  }
+  @keyframes ahpulse {
+    0%,100% { transform: translate(-50%,-50%) scale(1.18); opacity: .45; }
+    50%     { transform: translate(-50%,-50%) scale(1.0);  opacity: .95; }
+  }
+
+  /*
+    ─── [상단] 보스 정보 묶음 (체력바 + 행동 예고 + 원형 시간 게이지) ──────
+    의도: "적 위에 묶음"으로 표시 (CLAUDE §5). 정확한 데미지 숫자는 안 보여줌 —
+          모션/아이콘으로 위협 "종류"만, 크기는 HP 미리보기로 (CORE_COMBAT §5).
+  */
+  .boss-cluster {
+    position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .boss-sprite {
+    width: 64px; height: 64px; border-radius: 12px;
+    background: radial-gradient(circle at 40% 30%, #c0524f, #5e1f2c);
+    border: 2px solid #e07a76; display: grid; place-items: center; font-size: 30px;
+    box-shadow: 0 0 22px rgba(200,60,60,.45);
+  }
+  .boss-hp {
+    width: 240px; height: 12px; background: #2a2230; border-radius: 6px;
+    border: 1px solid #4a3a44; overflow: hidden;
+  }
+  .boss-hp > i { display: block; height: 100%; width: 77%;
+    background: linear-gradient(90deg, #e0524d, #ff7b6b); }
+  /* 체력바 + 카운트다운을 한 줄에 (카운트다운 = 체력 옆) */
+  .boss-hp-row { display: flex; align-items: center; gap: 8px; }
+
+  /* ─── 미니맵 (우상단 작게, 아이작 결) ───────────────────────────────────
+     ※ 던전 탐험 레이어 — Phase 2.5 단일 전투 프로토타입엔 실제론 안 뜸.
+       여기선 "전체 게임에서 우상단에 이 정도 크기" 자리 확인용 플레이스홀더. */
+  .minimap {
+    position: absolute; right: 12px; top: 12px;
+    background: rgba(14,11,18,.6); border: 1px solid #322b3e; border-radius: 6px;
+    padding: 6px; display: grid; grid-template-columns: repeat(4, 13px);
+    grid-auto-rows: 13px; gap: 3px;
+  }
+  .minimap .room { border-radius: 3px; background: #2a2230; border: 1px solid #3a3144; }
+  .minimap .room.cur   { background: #b9a3e8; border-color: #d9ccff; }  /* 현재 방 */
+  .minimap .room.clear { background: #364a3d; }                          /* 클리어 */
+  .minimap .room.boss  { background: #5e1f2c; border-color: #e07a76; }   /* 보스방 */
+  .minimap .room.fog   { background: #191520; border-color: #241f2e; opacity: .5; } /* 미발견 */
+  .minimap .room.none  { background: transparent; border: none; }        /* 연결 없음 */
+  /* 원형 시간 게이지: conic-gradient로 8초 중 5초 경과(=62.5%) 표현 */
+  .time-gauge {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: conic-gradient(var(--danger) 0 62.5%, #3a2f3f 62.5% 100%);
+    display: grid; place-items: center; position: relative;
+  }
+  .time-gauge::after {
+    content: ""; width: 18px; height: 18px; border-radius: 50%; background: #16121c;
+  }
+  .time-gauge b { position: absolute; font-size: 9px; color: var(--ink); }
+
+  /*
+    ─── [좌상단] HP 패널 + 베리어 + 미리보기 ──────────────────────────────
+    의도(핵심): HP 미리보기는 베리어를 "실시간 반영"해 줄어듦 (CORE_COMBAT §5).
+      현재 컷: HP 120/120 + 베리어 30. 보스 예고 데미지 25(자동명중 패턴 A).
+      베리어 30 ≥ 25 이므로 → 미리보기는 베리어 구간만 깎고 HP는 0 감소.
+      = "막을 수 있겠네" 즉각 피드백. 숫자 아닌 바 구간이라 계산기 게임화 X.
+  */
+  .hp-panel { position: absolute; left: 16px; top: 14px; width: 230px; }
+  .hp-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .hp-row .lbl { font-size: 11px; color: var(--ink-dim); }
+  .hp-row .num { font-size: 15px; font-weight: 700; }
+  .hp-row .shield { color: var(--barrier); font-weight: 700; }  /* 획득한 베리어 (+N) */
+  .hp-bar {
+    position: relative; height: 16px; background: #241d29;
+    border: 1px solid #4a3a44; border-radius: 8px; overflow: hidden;
+  }
+  .hp-bar > .fill { position: absolute; left: 0; top: 0; height: 100%; width: 100%;
+    background: linear-gradient(90deg, #3f9b52, var(--hp)); }
+  /* 베리어: HP 위에 얹히는 별도 레이어(우측 끝 30 구간) */
+  .hp-bar > .barrier { position: absolute; right: 0; top: 0; height: 100%; width: 25%;
+    background: repeating-linear-gradient(45deg, rgba(143,183,214,.85) 0 6px, rgba(143,183,214,.5) 6px 12px);
+    border-left: 2px solid #cfe2f2; }
+  /* 예고(맞으면 여기까지): 베리어가 흡수하므로 베리어 구간 안에서만 점멸 */
+  .hp-bar > .preview { position: absolute; right: 0; top: 0; height: 100%; width: 21%;
+    background: rgba(224,82,77,.55); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  .hp-note { font-size: 10px; color: var(--ink-dim); margin-top: 4px; line-height: 1.4; }
+  .hp-note b { color: var(--barrier); }
+
+  /*
+    ─── [하단 좌] 큐 = "지금 뭐 시전 중" 표시 (병렬) ───────────────────────
+    의도: 큐는 전략 슬롯이 아니라 시전중 표시 장치 (CORE_COMBAT §4 / 인터뷰 결정).
+          마법사는 병렬 → 여러 개가 각자 타이머. 가독성이 검증 포인트.
+          여기선 메테오(3초,60%)+체인라이트닝(1.5초,30%) 2개가 동시에 도는 컷.
+  */
+  .queue { position: absolute; left: 16px; bottom: 86px; display: flex; flex-direction: column; gap: 4px; }
+  .queue-title { font-size: 8px; color: var(--ink-dim); }
+  .cast {
+    width: 78px; background: rgba(20,16,26,.72); border: 1px solid #3a3144;
+    border-radius: 5px; padding: 3px 5px; display: flex; align-items: center; gap: 5px;
+  }
+  .cast .ic { font-size: 11px; line-height: 1; }
+  .cast .pbar { flex: 1; height: 4px; background: #2a2230; border-radius: 2px; overflow: hidden; }
+  .cast .pbar > i { display: block; height: 100%; }
+  .cast.meteor .pbar > i { width: 60%; background: var(--atk); }
+  .cast.chain  .pbar > i { width: 30%; background: var(--atk); }
+
+  /*
+    ─── [좌하/코스트] 코스트 = 사이클 자원 ────────────────────────────────
+    의도: 프로토타입 고정 코스트 5 (단일 전투, 층=코스트 미적용 — MAGE_PROTOTYPE §1).
+          현재 0/5 = 방금 메테오3+체인2 다 씀 → 손패 있어도 대기. 의도된 상태.
+  */
+  .cost { position: absolute; left: 16px; bottom: 54px; }
+  .cost .cnum { font-size: 23px; font-weight: 800; color: var(--ink); }
+
+  /*
+    ─── [하단 중앙] 손패 부채꼴 ──────────────────────────────────────────
+    의도: 5장 드로우 부채꼴 배치, 호버 시 확대 (CLAUDE §5). Layout Group 못 씀 → 직접 각도 계산.
+          카드 텍스트는 박지 않음 — "외워서 쓰는 게 기본", 시각 표기로 0.5초 인지 (CARDS §2).
+          표기 3축: 색(좌상단 코스트 배지) · 모양(일러스트 원/네모) · 점(상단=조준 필요).
+          이 컷의 손패 5장: 마력탄/매직미사일/베리어/냉기폭발/메테오(조준).
+  */
+  .hand { position: absolute; left: 50%; bottom: -26px; transform: translateX(-50%);
+    width: 700px; height: 190px; }
+  /* .card = "정지된 히트영역(footprint)". 회전·확대·떠오름은 전부 안쪽 .visual이 담당.
+     → 호버해도 이 히트영역은 안 움직임 → 커서가 안 빠져나감 → 카드 안 흔들림(깜빡임 방지).
+       (겹친 부채꼴에서 호버 flicker를 없애는 핵심 구조) */
+  .card {
+    position: absolute; bottom: 0; left: 50%;
+    width: 104px; height: 144px; margin-left: -52px;
+    transform: translateX(var(--tx,0)) translateY(var(--ty,0));
+    transform-origin: bottom center;
+    z-index: 1;
+  }
+  .card:hover { z-index: 60; }   /* 떠오른 카드를 맨 앞으로만 (영역은 고정) */
+
+  /* .visual = 실제 보이는 카드. 평소엔 부채꼴 회전(var(--rot))만. */
+  .card .visual {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, #2b2433, #201a28);
+    border: 1px solid #4a3f57; border-radius: 10px;
+    box-shadow: 0 6px 14px rgba(0,0,0,.45);
+    transform-origin: bottom center;
+    transform: rotate(var(--rot,0deg));
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 8px 6px 6px;
+  }
+  /* 호버: 안쪽만 똑바로 펴지며 위로 떠오르고 1.5배 — 바깥 히트영역은 그대로라 안 흔들림 */
+  .card:hover .visual {
+    transform: rotate(0deg) translateY(-66px) scale(1.5);
+    box-shadow: 0 16px 32px rgba(0,0,0,.6); border-color: #8a7aa6;
+  }
+  /* 부채꼴: 10장(손패 상한) 각도/위치 — 직접 계산. 구현 시 카드 수에 따라 코드로 일반화.
+     10장이면 카드끼리 겹침이 커짐 → 호버 확대로 개별 인지. 밀도/가독성이 이 컷의 확인 포인트. */
+  .card:nth-child(1)  { --tx:-252px; --rot:-22.5deg; --ty:30px; }
+  .card:nth-child(2)  { --tx:-196px; --rot:-17.5deg; --ty:19px; }
+  .card:nth-child(3)  { --tx:-140px; --rot:-12.5deg; --ty:10px; }
+  .card:nth-child(4)  { --tx:-84px;  --rot:-7.5deg;  --ty:4px; }
+  .card:nth-child(5)  { --tx:-28px;  --rot:-2.5deg;  --ty:0px; }
+  .card:nth-child(6)  { --tx:28px;   --rot:2.5deg;   --ty:0px; }
+  .card:nth-child(7)  { --tx:84px;   --rot:7.5deg;   --ty:4px; }
+  .card:nth-child(8)  { --tx:140px;  --rot:12.5deg;  --ty:10px; }
+  .card:nth-child(9)  { --tx:196px;  --rot:17.5deg;  --ty:19px; }
+  .card:nth-child(10) { --tx:252px;  --rot:22.5deg;  --ty:30px; }
+
+  /* 좌상단 코스트 배지: 색 = 분류 (빨=공격 / 파=스킬) */
+  .cost-badge {
+    position: absolute; top: -8px; left: -8px;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 13px; font-weight: 800; color: #fff;
+    border: 2px solid #fff3;
+  }
+  .cost-badge.atk   { background: var(--atk); }
+  .cost-badge.skill { background: var(--skill); }
+
+  /* 조준 필요 = 코스트 배지에 "조준선(레티클)" 입힘 (메테오만)
+     의도: 우상단은 파워 별(★) 자리 → 충돌 피함. 코스트 배지는 항상 보이는 좌상단 →
+           거기에 점선 링 + 십자 조준선 = "이 카드는 타겟해야 함"을 직관적으로. */
+  .cost-badge.aim::before {
+    content: ""; position: absolute; inset: -5px; border-radius: 50%;
+    border: 1.5px dashed rgba(255,255,255,.9);
+  }
+  .cost-badge.aim::after {
+    content: ""; position: absolute; inset: -9px;
+    background:
+      linear-gradient(#fff,#fff) 50% 0   / 2px 5px no-repeat,
+      linear-gradient(#fff,#fff) 50% 100%/ 2px 5px no-repeat,
+      linear-gradient(#fff,#fff) 0   50% / 5px 2px no-repeat,
+      linear-gradient(#fff,#fff) 100% 50%/ 5px 2px no-repeat;
+  }
+
+  /*
+    일러스트 영역 = 모양이 정보(원=단일 / 네모=광역). 지금은 도형+이모지 임시.
+    ★ data-art-slot: 나중에 AI 생성 일러스트가 들어갈 자리. 도형은 유지(정보축이라).
+  */
+  .art {
+    margin-top: 10px; width: 54px; height: 54px;
+    display: grid; place-items: center; font-size: 26px;
+    background: #15111c; border: 2px solid #6a5d7d;
+    /* 일러스트가 들어와도 이 테두리 모양(원/네모)은 정보로 유지 */
+  }
+  .art.single { border-radius: 50%; }     /* 원 = 단일 */
+  .art.aoe    { border-radius: 6px; }      /* 네모 = 광역 */
+  .art-slot-tag { font-size: 7px; color: #5c5470; margin-top: 2px; }
+  /* 이름 + 효과를 카드 하단에 묶음. 효과는 평소 숨김 → 호버 시 펼쳐짐 (외워서 쓰는 결) */
+  .card .cbottom { margin-top: auto; width: 100%; }
+  .card .cname { font-size: 11px; font-weight: 600; }
+  .card .detail {
+    font-size: 9px; color: var(--ink-dim); line-height: 1.3; text-align: center;
+    max-height: 0; opacity: 0; overflow: hidden;
+    transition: max-height .15s ease, opacity .15s ease;
+  }
+  .card:hover .detail { max-height: 44px; opacity: 1; margin-top: 3px; }
+
+  /*
+    ─── [하단 우] 정렬 버튼 3개 + 덱 뭉치 ────────────────────────────────
+    의도: 정렬 토글 A=드로우순 / B=코스트 / C=타입 (CLAUDE §5).
+          덱 뭉치 클릭 → 모달(남은 카드/무덤/전체). 여기선 자리만.
+  */
+  .deck-area { position: absolute; right: 16px; bottom: 20px; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .sorts { display: flex; flex-direction: row; gap: 4px; }
+  .sorts button { width: 22px; height: 22px; font-size: 11px; font-weight: 700; padding: 0;
+    display: grid; place-items: center; background: rgba(20,16,26,.7);
+    color: var(--ink-dim); border: 1px solid #4a3f57; border-radius: 5px; cursor: pointer; }
+  .sorts button:hover { color: var(--ink); border-color: #6a5d7d; }
+  .deck-pile { width: 54px; height: 74px; border-radius: 8px;
+    background: linear-gradient(180deg, #2b2433, #201a28); border: 1px solid #4a3f57;
+    display: grid; place-items: center; position: relative;
+    box-shadow: 3px 3px 0 #1a1622, 6px 6px 0 #151119; }
+  .deck-pile b { font-size: 16px; } .deck-pile small { position: absolute; bottom: 4px; font-size: 9px; color: var(--ink-dim); }
+
+  /* ─── 화면 밖: 검증용 범례 + 설계 메모 (실제 게임엔 없음) ─── */
+  .meta { width: min(960px, 96vw); display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .legend, .memo { background: #16121d; border: 1px solid #2e2738; border-radius: 8px; padding: 12px 14px; font-size: 12px; line-height: 1.7; color: var(--ink-dim); }
+  .legend h3, .memo h3 { color: var(--ink); font-size: 13px; margin-bottom: 6px; }
+  .legend .k { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+  .tag { color: #d9b04d; }
+</style>
+</head>
+<body>
+
+  <!-- ====================== 게임 화면 (16:9) ====================== -->
+  <div class="stage">
+
+    <!-- 우상단: 미니맵 (던전 레이어 · 전투 프로토타입엔 실제 안 뜸 · 자리 확인용) -->
+    <div class="minimap">
+      <div class="room none"></div><div class="room fog"></div><div class="room none"></div><div class="room none"></div>
+      <div class="room clear"></div><div class="room cur"></div><div class="room clear"></div><div class="room fog"></div>
+      <div class="room none"></div><div class="room clear"></div><div class="room boss"></div><div class="room none"></div>
+    </div>
+
+    <!-- 전장: 적 회피가능 장판(빨강) / 내 메테오 조준영역(청록) / 플레이어 -->
+    <div class="floor-aoe"></div>
+    <div class="aim-zone"></div>
+    <div class="player">🧙</div>
+    <!-- 자동명중 확정타 텔레그래프: 캐릭터를 조이는 빨간 링 (못 피함, 방어 카드로 흡수) -->
+    <div class="autohit"></div>
+
+    <!-- 상단: 보스 묶음 — 최소 정보만 (예고는 모션 + 바닥 장판으로, 텍스트 X. CORE_COMBAT §5)
+         카운트다운(원형 시간 게이지) = 체력바 바로 옆. 장황한 예고 텍스트는 제거(전투 방해). -->
+    <div class="boss-cluster">
+      <div class="boss-sprite">👹</div>
+      <div class="boss-hp-row">
+        <div class="boss-hp"><i></i></div>
+        <span class="time-gauge"><b>3</b></span>
+      </div>
+    </div>
+
+    <!-- 좌상단: HP + 베리어 + 미리보기 -->
+    <div class="hp-panel">
+      <div class="hp-row"><span class="lbl">HP</span><span class="num">120 / 120<span class="shield">(+30)</span></span></div>
+      <div class="hp-bar">
+        <div class="fill"></div>
+        <div class="barrier"></div>
+        <div class="preview"></div>
+      </div>
+      <div class="hp-note">
+        🛡️ <b>베리어 30</b> 보유 · 보스 예고 데미지 25 →
+        베리어가 흡수해 <b>HP 미리보기 0</b> (점멸 구간이 베리어 안에 머무름)
+      </div>
+    </div>
+
+    <!-- 하단 좌: 큐(시전중 표시) — 의도적으로 최소화. 아이콘 + 진행바만 (살짝 줄임) -->
+    <div class="queue">
+      <div class="queue-title">시전 중</div>
+      <div class="cast meteor"><span class="ic">☄️</span><div class="pbar"><i></i></div></div>
+      <div class="cast chain"><span class="ic">⚡</span><div class="pbar"><i></i></div></div>
+    </div>
+
+    <!-- 좌하: 코스트 — 라벨 없이 숫자만 (0/5 = 방금 메테오3+체인2 다 씀, 다음 사이클 대기) -->
+    <div class="cost">
+      <span class="cnum">0 / 5</span>
+    </div>
+
+    <!-- 하단 중앙: 손패 부채꼴 10장 (손패 상한 꽉 찬 상태 — 밀도/가독성 확인용)
+         ※ 8종 중 일부 중복(마력탄·베리어)으로 10장 구성. 레이아웃 스트레스 테스트. -->
+    <div class="hand">
+      <!-- 1) 마력탄: 공격 1코, 광역(네모)·자동(점X) -->
+      <div class="card"><div class="visual">
+        <span class="cost-badge atk">1</span>
+        <div class="art aoe">💥</div>
+        <div class="art-slot-tag" data-art-slot="마력탄">[일러스트]</div>
+        <div class="cbottom"><div class="cname">마력탄</div><div class="detail">광역 18 데미지 · 1초</div></div>
+      </div></div>
+      <!-- 2) 마력탄 (중복) -->
+      <div class="card"><div class="visual">
+        <span class="cost-badge atk">1</span>
+        <div class="art aoe">💥</div>
+        <div class="art-slot-tag" data-art-slot="마력탄">[일러스트]</div>
+        <div class="cbottom"><div class="cname">마력탄</div><div class="detail">광역 18 데미지 · 1초</div></div>
+      </div></div>
+      <!-- 3) 매직미사일: 공격 1코, 단일(원)·자동 / 즉발 -->
+      <div class="card"><div class="visual">
+        <span class="cost-badge atk">1</span>
+        <div class="art single">✨</div>
+        <div class="art-slot-tag" data-art-slot="매직미사일">[일러스트]</div>
+        <div class="cbottom"><div class="cname">매직미사일</div><div class="detail">단일 12 데미지 · 즉발</div></div>
+      </div></div>
+      <!-- 4) 체인라이트닝: 공격 2코, 광역(네모)·자동 -->
+      <div class="card"><div class="visual">
+        <span class="cost-badge atk">2</span>
+        <div class="art aoe">⚡</div>
+        <div class="art-slot-tag" data-art-slot="체인라이트닝">[일러스트]</div>
+        <div class="cbottom"><div class="cname">체인라이트닝</div><div class="detail">광역 28 데미지 · 1.5초</div></div>
+      </div></div>
+      <!-- 5) 베리어: 스킬 1코, 자기(원)·자동 -->
+      <div class="card"><div class="visual">
+        <span class="cost-badge skill">1</span>
+        <div class="art single">🛡️</div>
+        <div class="art-slot-tag" data-art-slot="베리어">[일러스트]</div>
+        <div class="cbottom"><div class="cname">베리어</div><div class="detail">베리어 30 · 즉발</div></div>
+      </div></div>
+      <!-- 6) 베리어 (중복) -->
+      <div class="card"><div class="visual">
+        <span class="cost-badge skill">1</span>
+        <div class="art single">🛡️</div>
+        <div class="art-slot-tag" data-art-slot="베리어">[일러스트]</div>
+        <div class="cbottom"><div class="cname">베리어</div><div class="detail">베리어 30 · 즉발</div></div>
+      </div></div>
+      <!-- 7) 마나실드: 스킬 2코, 자기(원)·자동 -->
+      <div class="card"><div class="visual">
+        <span class="cost-badge skill">2</span>
+        <div class="art single">🔰</div>
+        <div class="art-slot-tag" data-art-slot="마나실드">[일러스트]</div>
+        <div class="cbottom"><div class="cname">마나실드</div><div class="detail">베리어 60 · 즉발</div></div>
+      </div></div>
+      <!-- 8) 신속한 사고: 스킬 1코, 자기(원)·자동, 드로우 -->
+      <div class="card"><div class="visual">
+        <span class="cost-badge skill">1</span>
+        <div class="art single">🧠</div>
+        <div class="art-slot-tag" data-art-slot="신속한사고">[일러스트]</div>
+        <div class="cbottom"><div class="cname">신속한 사고</div><div class="detail">드로우 +2 · 즉발</div></div>
+      </div></div>
+      <!-- 9) 냉기폭발: 스킬 2코, 광역(네모)·자동, 슬로우 -->
+      <div class="card"><div class="visual">
+        <span class="cost-badge skill">2</span>
+        <div class="art aoe">❄️</div>
+        <div class="art-slot-tag" data-art-slot="냉기폭발">[일러스트]</div>
+        <div class="cbottom"><div class="cname">냉기폭발</div><div class="detail">광역 12 + 슬로우 2초</div></div>
+      </div></div>
+      <!-- 10) 메테오: 공격 3코, 광역(네모)·조준 ← 코스트 배지에 조준선(레티클) -->
+      <div class="card"><div class="visual">
+        <span class="cost-badge atk aim">3</span>
+        <div class="art aoe">☄️</div>
+        <div class="art-slot-tag" data-art-slot="메테오">[일러스트]</div>
+        <div class="cbottom"><div class="cname">메테오</div><div class="detail">조준 광역 45 · 3초 캐스팅</div></div>
+      </div></div>
+    </div>
+
+    <!-- 하단 우: 정렬 버튼(A/B/C) = 덱 위에 작게 / 덱 뭉치
+         의도: 긴 버튼 대신 A·B·C만 → 덱 영역 폭 축소 → 손패 자리 확보.
+               의미(A드로우순/B코스트/C타입)는 title 툴팁으로 (외워서 쓰는 결). -->
+    <div class="deck-area">
+      <div class="sorts">
+        <button title="드로우순 정렬">A</button>
+        <button title="코스트순 정렬">B</button>
+        <button title="타입순 정렬">C</button>
+      </div>
+      <div class="deck-pile"><b>🂠</b><small>덱 1</small></div>
+    </div>
+
+  </div>
+
+  <!-- ====================== 화면 밖: 검증용 보조 (게임엔 없음) ====================== -->
+  <div class="meta">
+    <div class="legend">
+      <h3>시각 표기 범례 (검증용 · 실제 게임엔 없음)</h3>
+      <div><span class="k" style="background:var(--atk)"></span>공격(빨) ·
+           <span class="k" style="background:var(--skill)"></span>스킬(파) ·
+           <span class="k" style="background:var(--power)"></span>파워(노, 이 셋엔 없음)</div>
+      <div>⭕ 원 = 단일 &nbsp;|&nbsp; ⬛ 네모 = 광역</div>
+      <div>코스트 배지에 조준선(레티클) = 조준 필요(메테오) / 없음 = 자동 확정</div>
+      <div>★ 우상단 별 = 파워(영구) — 프로토타입 제외</div>
+      <div style="margin-top:6px; color:var(--ink)">— 적 공격 예고 (두 종류) —</div>
+      <div>🟥 바닥 빨간 영역 = <b style="color:#e89a97">회피가능</b> (무빙으로 피함)</div>
+      <div>🔴 캐릭터 둘레 빨간 링 = <b style="color:#e89a97">자동명중 확정타</b> (못 피함 → 방어 카드로 흡수)</div>
+      <div style="font-size:10px; margin-top:4px">※ 실제 게임은 사이클당 한 종류만 예고 — 이 컷은 둘 다 비교용</div>
+    </div>
+    <div class="memo">
+      <h3>이 컷의 검증 포인트</h3>
+      <div>① 큐 병렬 2개(메테오+체인) 시전중 표시가 한눈에 읽히나?</div>
+      <div>② HP/베리어/미리보기 3겹이 "막을 수 있겠네"로 즉각 읽히나?</div>
+      <div>③ 적 장판(빨강) vs 내 조준영역(청록) 구분되나?</div>
+      <div>④ 코스트 0/5 + 손패 있음 = "대기 상태"가 직관적인가?</div>
+      <div>⑤ 카드 호버 시 확대로 표기 3축이 0.5초에 인지되나?</div>
+      <div class="tag">※ 모든 수치 임시 · 다음 단계: 시간 흐름 → 이동 → 카드 사용 로직</div>
+    </div>
+  </div>
+
+</body>
+</html>
