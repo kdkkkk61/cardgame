@@ -150,7 +150,8 @@ namespace CarDungeon
         // ── 우상단: 미니맵 (자리 확인용 플레이스홀더) ──
         void DrawMinimap(float W)
         {
-            float cell = 13, gap = 3, cols = 4, rows = 3;
+            float cell = 13, gap = 3;
+            int cols = 4, rows = 3;
             float bw = cols * cell + (cols - 1) * gap + 12;
             float bh = rows * cell + (rows - 1) * gap + 12;
             float x = W - bw - 12, y = 12;
