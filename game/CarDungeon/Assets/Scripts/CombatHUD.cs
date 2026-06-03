@@ -75,7 +75,6 @@ namespace CarDungeon
                     if (kb.digit4Key.wasPressedThisFrame) mgr.PlayCard(3);
                     if (kb.digit5Key.wasPressedThisFrame) mgr.PlayCard(4);
                 }
-                if (kb.zKey.wasPressedThisFrame) mgr.CycleSlowMode();           // 슬로우 실험 전환
                 if (kb.xKey.wasPressedThisFrame && mgr.boss != null)            // 보스 이동 전환
                     mgr.boss.moveMode = mgr.boss.moveMode == Boss.MoveMode.Chase
                         ? Boss.MoveMode.Stationary : Boss.MoveMode.Chase;
@@ -181,12 +180,10 @@ namespace CarDungeon
         // ── 실험 토글 상태 (슬로우 A/B/C/D · 보스 이동) ──
         void DrawToggles(float W, float H)
         {
-            int p = mgr.aimPreset;
-            string sm = $"{CombatManager.AimSlowDur[p]}s @ 속도{Mathf.RoundToInt(CombatManager.AimSlowScale[p] * 100)}%";
             string bm = mgr.boss != null && mgr.boss.moveMode == Boss.MoveMode.Chase ? "추적" : "정주";
             string aim = mgr.IsAiming ? "   |   조준 중: 좌클릭=낙하 / 우클릭=취소" : "";
             GUI.Label(new Rect(W / 2 - 280, H - 20, 560, 18),
-                $"[Z] 조준슬로우: <color=#54d6d0>{sm}</color>    [X] 보스이동: <color=#b9a3e8>{bm}</color>{aim}",
+                $"[X] 보스이동: <color=#b9a3e8>{bm}</color>{aim}",
                 new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter });
         }
 

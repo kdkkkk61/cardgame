@@ -49,10 +49,9 @@ namespace CarDungeon
         public Vector2 aimPos;
         CardData _aimCard;
 
-        // 조준 슬로우(B 확정) — 지속/세기 튜닝용 프리셋 비교 (Z로 전환)
-        public static readonly float[] AimSlowDur   = { 0.7f, 0.5f, 0.7f, 0.5f };
-        public static readonly float[] AimSlowScale = { 0.5f, 0.5f, 0.7f, 0.7f }; // 화면 속도 비율
-        public int aimPreset = 2;   // 기본 0.7s @ 속도 70%
+        // 조준 슬로우(B 확정) — 0.7초 동안 화면 속도 70%
+        public const float AimSlowDuration = 0.7f;
+        public const float AimSlowScale = 0.7f;
         public const float AimMoveScale = 0.4f;     // 조준 중 저속 이동 배율
         float _aimSlowTimer = 0f;
 
@@ -64,7 +63,7 @@ namespace CarDungeon
         public const int ContactDamage = 8;
         public const float ContactRadius = 0.95f;
         public const float ContactInvuln = 0.8f;
-        public const float ContactKnockback = 4f;
+        public const float ContactKnockback = 9f;  // 더 크게 밀림
 
         // FX 이벤트 (HUD가 구독)
         public event System.Action<int> onDamageDealt; // 보스 피격 데미지
@@ -122,13 +121,16 @@ namespace CarDungeon
                     np.y = Mathf.Clamp(np.y, -player.arenaHalf.y, player.arenaHalf.y);
                     player.transform.position = np;
 
-                    // 2) 접촉 데미지 (무적 아닐 때만 + 넉백)
+                    // 2) 접촉 데미지 (무적 아닐 때만 + 넉백) — 베리어가 먼저 흡수
                     if (!player.IsInvuln)
                     {
-                        playerHP = Mathf.Max(0, playerHP - ContactDamage);
+                        int absorbed = Mathf.Min(barrier, ContactDamage);
+                        barrier -= absorbed;
+                        int taken = ContactDamage - absorbed;
+                        playerHP = Mathf.Max(0, playerHP - taken);
                         player.HitReact(dir, ContactKnockback, ContactInvuln);
                         onPlayerHit?.Invoke();
-                        lastLog = $"보스와 충돌! -{ContactDamage}";
+                        lastLog = $"보스와 충돌! {ContactDamage} (흡수 {absorbed} / 피해 {taken})";
                     }
                 }
             }
@@ -248,8 +250,8 @@ namespace CarDungeon
             if (!CanPlay(c)) return;
             IsAiming = true; _aimCard = c;
             if (player != null) player.moveScale = AimMoveScale; // 조준 중 저속 이동
-            Time.timeScale = AimSlowScale[aimPreset];            // 조준 시작 슬로우 버스트
-            _aimSlowTimer = AimSlowDur[aimPreset];
+            Time.timeScale = AimSlowScale;                       // 조준 시작 슬로우 버스트
+            _aimSlowTimer = AimSlowDuration;
         }
 
         public void ConfirmAim(Vector2 worldPos)
@@ -273,11 +275,6 @@ namespace CarDungeon
             _aimSlowTimer = 0f;
             Time.timeScale = 1f;
             if (player != null) { player.moveScale = 1f; player.movementLocked = false; }
-        }
-
-        public void CycleSlowMode()
-        {
-            aimPreset = (aimPreset + 1) % AimSlowDur.Length;
         }
 
         void ResolveEntry(CastEntry e)
