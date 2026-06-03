@@ -189,21 +189,24 @@ namespace CarDungeon
     /// </summary>
     public static class CardMath
     {
-        // [의도] (기본 + 카드강화 + 플랫버프) × (1 + 배율버프) — 더하기 먼저, 곱하기 나중.
+        // [의도] 카드데미지(base + 강화, 전부 가산) × (1 + Σ버프%) → 소수점 내림.
+        //   · 카드 강화는 전부 더하기(고정 +N, 또는 %강화 = +내림(base×pct)를 bonusDamage에 누적).
+        //   · 버프층(축복/파워/영구)만 ×(1+합). 버프끼리 '합쳐서 1번' 적용 = 곱연산 폭주 아님.
+        //   · 무한 강화해도 카드 단위가 선형이라 통제됨.
         public static int Damage(CardInstance c, PlayerState ps)
         {
             if (c.def.damage <= 0) return 0;
-            float flat = c.def.damage + c.bonusDamage + ps.Sum(ModStat.DamageFlat);
+            float cardDmg = c.def.damage + c.bonusDamage + ps.Sum(ModStat.DamageFlat);
             float mult = 1f + ps.Sum(ModStat.DamageMult);
-            return Mathf.Max(0, Mathf.RoundToInt(flat * mult));
+            return Mathf.Max(0, Mathf.FloorToInt(cardDmg * mult)); // 내림
         }
 
         public static int Absorb(CardInstance c, PlayerState ps)
         {
             if (c.def.absorb <= 0) return 0;
-            float flat = c.def.absorb + c.bonusAbsorb + ps.Sum(ModStat.AbsorbFlat);
+            float cardAbs = c.def.absorb + c.bonusAbsorb + ps.Sum(ModStat.AbsorbFlat);
             float mult = 1f + ps.Sum(ModStat.AbsorbMult);
-            return Mathf.Max(0, Mathf.RoundToInt(flat * mult));
+            return Mathf.Max(0, Mathf.FloorToInt(cardAbs * mult)); // 내림
         }
 
         public static int DrawCount(CardInstance c) => c.def.drawCount;
