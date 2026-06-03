@@ -17,8 +17,11 @@ namespace CarDungeon
         public float invulnTimer = 0f;
         public bool IsInvuln => invulnTimer > 0f;
 
-        Vector2 _knock;
+        Vector2 _knockVel;
+        float _knockTime;
+        const float KnockDuration = 0.22f;
         const float KnockDecay = 14f;
+        public bool IsKnocked => _knockTime > 0f;
         SpriteRenderer _sr;
         Color _baseColor;
 
@@ -28,10 +31,11 @@ namespace CarDungeon
             if (_sr != null) _baseColor = _sr.color;
         }
 
-        /// <summary>보스 접촉 피격 반응 — 밀려나고 잠깐 무적.</summary>
+        /// <summary>보스 접촉 피격 반응 — 밀려나고 잠깐 무적. 넉백 동안 이동입력 무시.</summary>
         public void HitReact(Vector2 dir, float force, float invuln)
         {
-            _knock = dir.sqrMagnitude > 0.0001f ? dir.normalized * force : Vector2.up * force;
+            _knockVel = dir.sqrMagnitude > 0.0001f ? dir.normalized * force : Vector2.up * force;
+            _knockTime = KnockDuration;
             invulnTimer = invuln;
         }
 
@@ -39,16 +43,18 @@ namespace CarDungeon
         {
             Vector3 p = transform.position;
 
-            // 넉백 (입력과 무관하게 적용 후 감쇠)
-            if (_knock.sqrMagnitude > 0.0001f)
+            // 넉백 중: 이동입력 무시하고 밀려나기만
+            bool knocked = _knockTime > 0f;
+            if (knocked)
             {
-                p += (Vector3)(_knock * Time.deltaTime);
-                _knock = Vector2.MoveTowards(_knock, Vector2.zero, KnockDecay * Time.deltaTime);
+                _knockTime -= Time.deltaTime;
+                p += (Vector3)(_knockVel * Time.deltaTime);
+                _knockVel = Vector2.MoveTowards(_knockVel, Vector2.zero, KnockDecay * Time.deltaTime);
             }
 
-            // 입력 이동
+            // 입력 이동 (넉백 끝난 뒤)
             var kb = Keyboard.current;
-            if (!movementLocked && kb != null)
+            if (!knocked && !movementLocked && kb != null)
             {
                 Vector2 dir = Vector2.zero;
                 if (kb.wKey.isPressed || kb.upArrowKey.isPressed) dir.y += 1;
