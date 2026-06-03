@@ -49,10 +49,12 @@ namespace CarDungeon
         public Vector2 aimPos;
         CardData _aimCard;
 
-        // 조준 슬로우(B 확정) — 0.7초 동안 화면 속도 70%
+        // [설계 의도] 조준 카드(메테오 등)는 위치를 찍는 동안 손이 묶여 자동 카드보다 불리.
+        //   그 불리함의 보상 = "조준 시작 순간 0.7초간 화면 슬로우(속도 70%)" 한 번뿐(B안 확정).
+        //   ★ 핵심 원칙: 슬로우는 '딱 0.7초만'. 조준을 질질 끌어도 계속 느려지면 안 됨
+        //     (계속 느리면 조준=안전카드화 → 페이스 붕괴). 버스트 후엔 즉시 정상 속도·정상 이동.
         public const float AimSlowDuration = 0.7f;
-        public const float AimSlowScale = 0.7f;
-        public const float AimMoveScale = 0.4f;     // 조준 중 저속 이동 배율
+        public const float AimSlowScale = 0.7f;  // 화면 속도 비율(1=정상)
         float _aimSlowTimer = 0f;
 
         public PlayerController player;
@@ -88,7 +90,9 @@ namespace CarDungeon
         {
             if (state != CombatState.Fighting) return;
 
-            // 조준 슬로우/정지는 0.5초만 (실시간) 후 정상 속도 복귀 (조준은 계속)
+            // [의도] 조준 슬로우는 '딱 AimSlowDuration(0.7초)'만. unscaledDeltaTime으로 재서
+            //   슬로우(timeScale<1) 영향 없이 실제 0.7초가 지나면 정상 속도 복귀. 조준은 계속 가능하지만
+            //   더는 안 느려짐 → "조준 어드밴티지는 잠깐만" 원칙 유지.
             if (_aimSlowTimer > 0f)
             {
                 _aimSlowTimer -= Time.unscaledDeltaTime;
@@ -106,7 +110,10 @@ namespace CarDungeon
                 }
             }
 
-            // 보스-플레이어 충돌 처리 (겹침 금지 + 접촉 데미지)
+            // [의도] 보스-플레이어는 절대 겹치지 않는다(물리적 몸). 추적 보스에 붙으면
+            //   ① 밀려나고(겹침 분리) ② 접촉 데미지(베리어 우선 흡수) ③ 0.8초 무적.
+            //   → 마법사는 필중이라 무빙=거리 조절. 보스에 붙으면 손해 = "거리 관리"가 진짜 압박이 됨.
+            //   (정주/돌진 등은 향후 몹 특성·이동 패턴으로. 지금은 추적 기본)
             if (boss != null && player != null)
             {
                 Vector2 pp = player.transform.position, bp = boss.transform.position;
@@ -144,6 +151,9 @@ namespace CarDungeon
         }
 
         // --- 사이클 ---
+        // [의도] 한 사이클 = 보스가 다음 행동을 예고하고 시간이 흐르는 한 텀(CORE_COMBAT §2).
+        //   강제 종료 버튼 없음 — 시간은 무조건 끝까지 흐른다(빨리 끝낼 유인 제거).
+        //   사이클 시작 시: 손패 전부 버리고 5장 새로, 코스트 풀회복(슬더슬식 에너지).
         void StartCycle()
         {
             cycleCount++;
@@ -153,7 +163,8 @@ namespace CarDungeon
             cost = MaxCost;
             DrawCards(DrawPerCycle);
 
-            // 패턴 번갈아 (사이클 시간 가변 — CORE_COMBAT 축2)
+            // [의도] 패턴을 번갈아 → 같은 보스라도 사이클 시간/대응이 달라짐(CORE_COMBAT 축2).
+            //   A 마력폭발=긴 사이클(준비 시간) / B 화염장판=짧은 사이클(긴급 회피).
             pattern = pattern == BossPattern.MagicBurst
                 ? BossPattern.FireFloor : BossPattern.MagicBurst;
             if (pattern == BossPattern.MagicBurst)
@@ -161,12 +172,16 @@ namespace CarDungeon
             else
             {
                 cycleLength = FireFloorTime;
-                // 화염 장판: 플레이어 현재 위치를 노림 → 무빙으로 이탈해야 함
+                // [의도] 화염 장판 = 플레이어의 '지금 위치'를 노림 → 가만 있으면 맞음.
+                //   반드시 무빙으로 영역을 벗어나야 회피 = "무빙이 의미를 갖는 순간".
                 aoeCenter = player != null ? (Vector2)player.transform.position : Vector2.zero;
             }
             cycleTimer = cycleLength;
         }
 
+        // [의도] 사이클 종료 = 보스 행동 발동. 패턴별 방어 수단이 다른 게 핵심:
+        //   · 마력폭발(자동명중) → 못 피함, '베리어 카드'로만 흡수 (카드로만 막는다 §8)
+        //   · 화염장판(회피가능) → '무빙'으로만 피함, 베리어 무관 (둘을 헷갈리면 죽음)
         void EndCycle()
         {
             if (pattern == BossPattern.MagicBurst)
@@ -230,7 +245,9 @@ namespace CarDungeon
             var c = hand[handIndex];
             if (!CanPlay(c)) return;
 
-            if (c.aimed) { BeginAim(handIndex); return; } // 조준 카드는 위치 지정 먼저
+            // [의도] 조준 카드는 즉시 발동이 아니라 '위치 지정' 단계로. 코스트 차감은 확정(ConfirmAim) 때.
+            //   취소하면 코스트 안 나감 = 조준은 실수해도 되는 행위(단, 시간은 흐름).
+            if (c.aimed) { BeginAim(handIndex); return; }
 
             cost -= c.cost;
             hand.RemoveAt(handIndex);
@@ -249,8 +266,9 @@ namespace CarDungeon
             var c = hand[handIndex];
             if (!CanPlay(c)) return;
             IsAiming = true; _aimCard = c;
-            if (player != null) player.moveScale = AimMoveScale; // 조준 중 저속 이동
-            Time.timeScale = AimSlowScale;                       // 조준 시작 슬로우 버스트
+            // 조준 시작 = 슬로우 버스트 1회만. 이후 _aimSlowTimer가 0이 되면 Update에서 정상 속도 복귀.
+            // (저속 이동 같은 '지속 패널티'는 두지 않음 — 조준 중에도 이동은 정상 속도)
+            Time.timeScale = AimSlowScale;
             _aimSlowTimer = AimSlowDuration;
         }
 
@@ -283,6 +301,9 @@ namespace CarDungeon
             if (c.absorb > 0) barrier += c.absorb;
             if (c.drawCount > 0) DrawCards(c.drawCount);
 
+            // [의도] 메테오(조준) = 마법사의 '수싸움' 카드. 찍은 자리에 3초 뒤 낙하 →
+            //   보스가 그 사이 빠져나가면 헛방. 그래서 냉기폭발(슬로우)로 묶고 쏘는 콤보가 핵심.
+            //   "슬로우 안 걸고 깔면 헛방"이 학습 포인트(MAGE_PROTOTYPE §3).
             if (c.aimed) // 메테오 — 조준 지점에 낙하, 보스가 그 안에 있어야 명중
             {
                 int dmg = c.damage;
