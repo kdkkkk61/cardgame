@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>유물 표시/획득 — 정적 목업 v1</title>
+<!--
+================================================================================
+  유물 표시 + 획득 — 정적 목업 v1
+================================================================================
+  출처: CORE_COMBAT §3(유물 캡 7) / META_PROGRESSION
+  ★ 2단계 표시:
+    ① 상시 유물 바 = 화면 상단. 보유 유물 아이콘 + 빈 슬롯(총 7). 호버=툴팁.
+       전투/탐험 어디서나 표시(여기선 캡 7 시각화용 컷).
+    ② 획득 순간 = 중앙 팝업. 큰 아이콘+이름+효과+확인 → 상단 바로 합류.
+  ★ 캡 7: 가득 차면 획득 시 '교체(하나 버리기)' 선택으로 전환(TBD 흐름).
+================================================================================
+-->
+<style>
+  :root{--bg:#0d0b12;--panel:#16121d;--panel2:#1b1822;--line:#322b3e;
+    --ink:#f2eef7;--ink-dim:#9b94a8;--gold:#e0c24d;--good:#57c46a;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:"Pretendard","맑은 고딕",system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;padding:20px;gap:14px;}
+  .stage{position:relative;width:min(980px,96vw);aspect-ratio:16/9;
+    background:radial-gradient(120% 90% at 50% 35%,#1c1828,#100d16);border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.55);}
+  .dim{position:absolute;inset:0;background:rgba(0,0,0,.45);}
+
+  /* ① 상시 유물 바 (상단) */
+  .relicbar{position:absolute;left:14px;top:12px;display:flex;gap:6px;align-items:center;z-index:3;}
+  .slot{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;font-size:17px;
+    background:rgba(20,16,26,.8);border:1px solid #4a3f57;}
+  .slot.empty{border-style:dashed;opacity:.5;font-size:11px;color:var(--ink-dim);}
+  .slot.fresh{border-color:var(--gold);box-shadow:0 0 12px rgba(224,194,77,.6);}
+  .relicbar .cap{margin-left:6px;font-size:11px;color:var(--ink-dim);}
+  /* 호버 툴팁(예시로 하나 펼침) */
+  .tip{position:absolute;left:0;top:40px;width:180px;background:rgba(13,11,18,.96);border:1px solid #4a3f57;
+    border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.5;color:var(--ink-dim);z-index:4;}
+  .tip b{color:var(--ink);}
+
+  /* ② 획득 팝업 (중앙) */
+  .popup{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:300px;
+    background:linear-gradient(180deg,var(--panel2),#15111c);border:2px solid var(--gold);border-radius:14px;
+    padding:20px;text-align:center;box-shadow:0 0 40px rgba(224,194,77,.25);z-index:5;}
+  .popup .lbl{font-size:12px;color:var(--gold);letter-spacing:2px;}
+  .popup .icon{margin:12px auto;width:88px;height:88px;border-radius:14px;display:grid;place-items:center;font-size:44px;
+    background:radial-gradient(circle at 40% 30%,#4a3f24,#241f10);border:2px solid var(--gold);box-shadow:0 0 22px rgba(224,194,77,.4);}
+  .popup .nm{font-size:17px;font-weight:800;}
+  .popup .eff{margin-top:8px;font-size:12px;color:#cfc8da;line-height:1.5;}
+  .popup .eff b{color:var(--good);}
+  .popup .ok{margin-top:16px;font-size:13px;font-weight:700;color:#bfe9c6;background:rgba(87,196,106,.18);
+    border:1px solid var(--good);border-radius:8px;padding:9px;cursor:pointer;}
+  .arrow{position:absolute;left:50%;top:90px;transform:translateX(-50%);font-size:20px;color:var(--gold);z-index:4;opacity:.7;}
+
+  .memo{width:min(980px,96vw);background:var(--panel);border:1px solid #2e2738;border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.7;color:var(--ink-dim);}
+  .memo h3{color:var(--ink);font-size:13px;margin-bottom:6px;}.memo .t{color:#d9b04d;}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="dim"></div>
+
+    <!-- ① 상시 유물 바 (상단) : 보유 4 + 빈 3 = 캡 7 -->
+    <div class="relicbar">
+      <div class="slot">🗡️</div>
+      <div class="slot">🛡️</div>
+      <div class="slot">📿</div>
+      <div class="slot fresh">💍</div>
+      <div class="slot empty">+</div>
+      <div class="slot empty">+</div>
+      <div class="slot empty">+</div>
+      <span class="cap">유물 4 / 7</span>
+    </div>
+    <!-- 호버 툴팁(예시) -->
+    <div class="tip" style="left:170px;"><b>💍 마력의 반지</b><br>사이클 시작 드로우 +1</div>
+
+    <!-- ② 획득 팝업 (중앙) -->
+    <div class="arrow">▲ 상단 바로 합류</div>
+    <div class="popup">
+      <div class="lbl">유물 획득!</div>
+      <div class="icon">💍</div>
+      <div class="nm">마력의 반지</div>
+      <div class="eff">사이클 시작 시 <b>드로우 +1</b><br><span style="color:var(--ink-dim)">영구 (이번 런)</span></div>
+      <div class="ok">확인 [E]</div>
+    </div>
+  </div>
+
+  <div class="memo">
+    <h3>의도 (게임엔 없음)</h3>
+    <div>① 상단 유물 바 = 보유 아이콘 + 빈 슬롯(캡 7). 호버 툴팁 = 이름+효과. 전투/탐험 상시 표시.</div>
+    <div>② 획득 = 중앙 팝업(큰 아이콘+효과) → 확인 → 상단 바로 합류(반짝). "뭘 얻었나" 확실히.</div>
+    <div>③ 캡 가득(7/7)에서 또 얻으면 → '교체(하나 버리기)' 선택 흐름으로 전환 (TBD).</div>
+    <div>④ 적용 = PlayerState Run 모디파이어. (카드보상 화면과 동일한 '획득 순간' 결.)</div>
+    <div class="t">※ 임시 · 획득 연출(반짝/사운드)·교체 UI는 추후</div>
+  </div>
+</body>
+</html>
