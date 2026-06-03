@@ -370,12 +370,17 @@
   /* 이름 + 효과를 카드 하단에 묶음. 효과는 평소 숨김 → 호버 시 펼쳐짐 (외워서 쓰는 결) */
   .card .cbottom { margin-top: auto; width: 100%; }
   .card .cname { font-size: 11px; font-weight: 600; }
+  /* 호버 시 능력 설명을 또렷한 패널로 표시 (어떤 카드인지 0.5초 인지) */
   .card .detail {
-    font-size: 9px; color: var(--ink-dim); line-height: 1.3; text-align: center;
+    font-size: 10px; color: var(--ink); line-height: 1.4; text-align: center;
     max-height: 0; opacity: 0; overflow: hidden;
     transition: max-height .15s ease, opacity .15s ease;
   }
-  .card:hover .detail { max-height: 44px; opacity: 1; margin-top: 3px; }
+  .card:hover .detail {
+    max-height: 60px; opacity: 1; margin-top: 4px; padding: 4px 6px;
+    background: rgba(13,11,18,.7); border: 1px solid #4a3f57; border-radius: 6px;
+  }
+  .card:hover .cname { color: #fff; }
 
   /*
     ─── [하단 우] 정렬 버튼 3개 + 덱 뭉치 ────────────────────────────────
