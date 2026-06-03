@@ -231,6 +231,11 @@
   @keyframes blink { 50% { opacity: .25; } }
   .hp-note { font-size: 10px; color: var(--ink-dim); margin-top: 4px; line-height: 1.4; }
   .hp-note b { color: var(--barrier); }
+  /* 전투 중 유물 줄(컴팩트, 패시브 참조용) */
+  .combat-relics { margin-top: 8px; display: flex; align-items: center; gap: 4px; }
+  .combat-relics .cr { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center;
+    font-size: 12px; background: rgba(20,16,26,.8); border: 1px solid #4a3f57; }
+  .combat-relics .crn { margin-left: 4px; font-size: 9px; color: var(--ink-dim); }
 
   /*
     ─── [하단 좌] 큐 = "지금 뭐 시전 중" 표시 (병렬) ───────────────────────
@@ -423,6 +428,11 @@
       <div class="hp-note">
         🛡️ <b>베리어 30</b> 보유 · 보스 예고 데미지 25 →
         베리어가 흡수해 <b>HP 미리보기 0</b> (점멸 구간이 베리어 안에 머무름)
+      </div>
+      <!-- 전투 중 유물 = 패시브라 작게. 아이콘만, 호버 시 툴팁. -->
+      <div class="combat-relics" title="보유 유물 (호버=툴팁)">
+        <span class="cr">🗡️</span><span class="cr">🛡️</span><span class="cr">📿</span><span class="cr">💍</span>
+        <span class="crn">유물 4/7</span>
       </div>
     </div>
 

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>유물 교체(캡 초과) — 정적 목업 v1</title>
+<!--
+================================================================================
+  유물 교체 — 정적 목업 v1 (캡 7/7 가득 찬 상태에서 새 유물 획득)
+================================================================================
+  출처: CORE_COMBAT §3(유물 캡 7) / relic_get_v1
+  ★ 흐름: 7/7 가득 + 새 유물 획득 → 이 화면.
+    상단 = 새 유물(강조), 아래 = 보유 7개. 버릴 1개 선택 → 교체. 또는 '포기'.
+  ★ 버린 유물 = 소멸(환불 없음, 단순). = "캡이 곧 결정"을 강제하는 순간.
+================================================================================
+-->
+<style>
+  :root{--bg:#0d0b12;--panel:#16121d;--panel2:#1b1822;--line:#322b3e;
+    --ink:#f2eef7;--ink-dim:#9b94a8;--gold:#e0c24d;--good:#57c46a;--atk:#e0524d;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:"Pretendard","맑은 고딕",system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;padding:20px;gap:14px;}
+  .stage{position:relative;width:min(980px,96vw);aspect-ratio:16/9;
+    background:radial-gradient(120% 90% at 50% 30%,#1c1828,#100d16);border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.55);display:flex;flex-direction:column;align-items:center;}
+  .ttl{margin-top:20px;font-size:17px;font-weight:700;}
+  .sub{font-size:11px;color:var(--ink-dim);margin-top:4px;}
+
+  /* 새 유물 (강조) */
+  .newrelic{margin-top:16px;display:flex;align-items:center;gap:12px;background:linear-gradient(180deg,var(--panel2),#15111c);
+    border:2px solid var(--gold);border-radius:12px;padding:12px 16px;box-shadow:0 0 24px rgba(224,194,77,.25);}
+  .newrelic .ic{width:54px;height:54px;border-radius:10px;display:grid;place-items:center;font-size:28px;
+    background:radial-gradient(circle at 40% 30%,#4a3f24,#241f10);border:2px solid var(--gold);}
+  .newrelic .nm{font-size:15px;font-weight:800;}
+  .newrelic .ef{font-size:12px;color:#cfc8da;margin-top:3px;}
+  .newrelic .ef b{color:var(--good);}
+  .vs{margin:12px 0 6px;font-size:12px;color:var(--ink-dim);}
+
+  /* 보유 7개 (버릴 것 고르기) */
+  .held{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;padding:0 24px;}
+  .relic{width:96px;background:var(--panel2);border:1px solid #4a3f57;border-radius:10px;padding:10px 8px;
+    text-align:center;cursor:pointer;transition:transform .1s,border-color .1s;}
+  .relic:hover{transform:translateY(-3px);border-color:var(--atk);}
+  .relic .ic{font-size:24px;}
+  .relic .nm{font-size:10px;font-weight:600;margin-top:4px;}
+  .relic .ef{font-size:9px;color:var(--ink-dim);margin-top:2px;line-height:1.3;}
+  .relic .drop{font-size:9px;color:var(--atk);margin-top:4px;opacity:0;}
+  .relic:hover .drop{opacity:1;}
+
+  .skip{margin:16px 0 20px;font-size:12px;color:var(--ink-dim);border:1px solid #4a3f57;border-radius:8px;padding:8px 16px;cursor:pointer;}
+
+  .memo{width:min(980px,96vw);background:var(--panel);border:1px solid #2e2738;border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.7;color:var(--ink-dim);}
+  .memo h3{color:var(--ink);font-size:13px;margin-bottom:6px;}.memo .t{color:#d9b04d;}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="ttl">유물 칸이 가득 찼습니다 (7/7)</div>
+    <div class="sub">새 유물을 받으려면 버릴 유물 1개를 선택</div>
+
+    <div class="newrelic">
+      <div class="ic">🔥</div>
+      <div>
+        <div class="nm">화염의 인장 <span style="color:var(--gold);font-size:11px">새 유물</span></div>
+        <div class="ef">공격 카드 <b>관통</b> 부여</div>
+      </div>
+    </div>
+
+    <div class="vs">↓ 아래에서 버릴 유물 1개를 고르면 교체됩니다 ↓</div>
+
+    <div class="held">
+      <div class="relic"><div class="ic">🗡️</div><div class="nm">예리한 칼날</div><div class="ef">데미지 +10%</div><div class="drop">✕ 버리기</div></div>
+      <div class="relic"><div class="ic">🛡️</div><div class="nm">강철 부적</div><div class="ef">최대 HP +15</div><div class="drop">✕ 버리기</div></div>
+      <div class="relic"><div class="ic">📿</div><div class="nm">마력의 구슬</div><div class="ef">드로우 +1</div><div class="drop">✕ 버리기</div></div>
+      <div class="relic"><div class="ic">💍</div><div class="nm">수호의 반지</div><div class="ef">보호 +5</div><div class="drop">✕ 버리기</div></div>
+      <div class="relic"><div class="ic">⏳</div><div class="nm">시간의 모래</div><div class="ef">시전 -10%</div><div class="drop">✕ 버리기</div></div>
+      <div class="relic"><div class="ic">🪙</div><div class="nm">탐욕의 동전</div><div class="ef">골드 획득 +20%</div><div class="drop">✕ 버리기</div></div>
+      <div class="relic"><div class="ic">❄️</div><div class="nm">서리 결정</div><div class="ef">슬로우 +0.5초</div><div class="drop">✕ 버리기</div></div>
+    </div>
+
+    <div class="skip">새 유물 포기 (안 받음)</div>
+  </div>
+
+  <div class="memo">
+    <h3>의도 (게임엔 없음)</h3>
+    <div>① 7/7 + 새 유물 획득 시에만 등장. 상단=새 유물, 아래=보유 7개.</div>
+    <div>② 버릴 1개 선택(호버 시 ✕ 버리기) → 교체. 또는 '포기'로 새 유물 안 받음.</div>
+    <div>③ 버린 유물 = 소멸(환불 없음). "캡이 곧 결정"을 강제하는 순간.</div>
+    <div>④ 적용 = PlayerState에서 버린 모디파이어 제거 + 새 모디파이어 추가.</div>
+    <div class="t">※ 임시 · 환불/판매 여부, 연출은 추후</div>
+  </div>
+</body>
+</html>
