@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>카드 강화 화면 — 정적 목업 v1</title>
+
+<!--
+================================================================================
+  카드 강화 페이지 — 정적 목업 v1 (슬더슬 모닥불 '대장장이' 결)
+================================================================================
+  출처: CARD_SYSTEM.md(CardInstance 강화) / interaction_v1(제단 진입) / META_PROGRESSION
+
+  ★ 흐름: 제단 접근 → [E] → "강화" 선택 → ★이 화면★(내 카드 전체 그리드) → 1장 골라 강화 → 확정.
+  ★ 목적: '카드 고르기'류(강화/획득/제거)는 작은 팝업이 아니라 전용 그리드 페이지로.
+          전체 덱을 한눈에 보고 비교해서 골라야 하니까. (오버레이, 씬전환 아님)
+
+  ★ 핵심:
+    - 내 덱 '전체'를 그리드로(중복도 각각 = CardInstance 단위).
+    - 카드 호버/선택 → 우측에 강화 전후(18→24) 미리보기.
+    - 등급 테두리 색 유지(일/희/영/전). 이미 강화된 카드엔 +Lv 뱃지.
+  ★ 재사용: 같은 그리드 틀로 '카드 제거', '카드 보상(획득)', '덱 보기'도 처리.
+================================================================================
+-->
+
+<style>
+  :root{
+    --bg:#0d0b12; --panel:#16121d; --panel2:#1b1822; --line:#322b3e;
+    --atk:#e0524d; --skill:#4d8fe0; --ink:#f2eef7; --ink-dim:#9b94a8;
+    --common:#8c8c9e; --rare:#4d9bef; --epic:#a866ec; --legend:#f59a33;
+    --good:#57c46a; --power:#e0c24d;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);
+    font-family:"Pretendard","맑은 고딕",system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;padding:20px;gap:14px;}
+
+  /* 16:9 오버레이 화면 (월드 위에 뜸 — 배경 어둡게) */
+  .stage{position:relative;width:min(980px,96vw);aspect-ratio:16/9;
+    background:linear-gradient(180deg,#16121d,#100d16);
+    border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    box-shadow:0 12px 40px rgba(0,0,0,.55);display:flex;flex-direction:column;}
+
+  .head{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(224,194,77,.07),transparent);}
+  .head .ic{width:28px;height:28px;border-radius:7px;background:#241f2e;border:1px solid #4a3f57;
+    display:grid;place-items:center;font-size:16px;}
+  .head .title{font-size:15px;font-weight:700;}
+  .head .sub{font-size:11px;color:var(--ink-dim);margin-left:6px;}
+  .head .close{margin-left:auto;font-size:11px;color:var(--ink-dim);border:1px solid #4a3f57;
+    border-radius:6px;padding:4px 9px;cursor:pointer;}
+
+  .content{flex:1;display:flex;min-height:0;}
+
+  /* 좌: 카드 그리드 (덱 전체, 스크롤) */
+  .grid-wrap{flex:1;padding:14px 16px;overflow:auto;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:12px;}
+  .card{position:relative;height:150px;border-radius:10px;
+    background:linear-gradient(180deg,#2b2433,#201a28);
+    border:2px solid var(--common);padding:8px 6px 6px;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:5px;
+    transition:transform .1s,box-shadow .1s;}
+  .card:hover{transform:translateY(-3px);box-shadow:0 8px 18px rgba(0,0,0,.5);}
+  .card.rare{border-color:var(--rare);} .card.epic{border-color:var(--epic);} .card.legend{border-color:var(--legend);}
+  .card.sel{box-shadow:0 0 0 2px var(--good),0 8px 18px rgba(0,0,0,.5);transform:translateY(-3px);}
+  .card.locked{opacity:.4;cursor:not-allowed;}  /* 강화 불가(예: 이미 최대) */
+
+  .cb{position:absolute;top:-8px;left:-8px;width:24px;height:24px;border-radius:50%;
+    display:grid;place-items:center;font-size:12px;font-weight:800;color:#fff;border:2px solid #fff3;}
+  .cb.atk{background:var(--atk);} .cb.skill{background:var(--skill);}
+  .lv{position:absolute;top:-8px;right:-6px;font-size:10px;font-weight:800;color:#10101a;
+    background:var(--power);border-radius:9px;padding:1px 6px;}
+  .art{margin-top:8px;width:46px;height:46px;display:grid;place-items:center;font-size:22px;
+    background:#15111c;border:2px solid #6a5d7d;}
+  .art.single{border-radius:50%;} .art.aoe{border-radius:6px;}
+  .cn{font-size:11px;font-weight:600;}
+  .ce{font-size:9px;color:var(--ink-dim);text-align:center;line-height:1.3;}
+
+  /* 우: 선택 카드 강화 미리보기 + 확정 */
+  .side{flex:0 0 230px;border-left:1px solid var(--line);padding:16px 14px;
+    display:flex;flex-direction:column;gap:12px;background:rgba(0,0,0,.15);}
+  .side h4{font-size:12px;color:var(--ink-dim);}
+  .preview{background:var(--panel2);border:1px solid #4a3f57;border-radius:9px;padding:12px;}
+  .preview .pn{font-size:14px;font-weight:700;margin-bottom:8px;}
+  .diff{display:flex;align-items:center;gap:8px;font-size:13px;}
+  .diff .from{color:var(--ink-dim);} .diff .arrow{color:var(--good);} .diff .to{color:var(--good);font-weight:800;}
+  .diff-row{margin:4px 0;}
+  .side .desc{font-size:11px;color:var(--ink-dim);line-height:1.5;}
+  .actions{margin-top:auto;display:flex;flex-direction:column;gap:8px;}
+  .btn{text-align:center;font-size:13px;padding:9px;border-radius:8px;cursor:pointer;}
+  .btn.ok{background:rgba(87,196,106,.18);border:1px solid var(--good);color:#bfe9c6;font-weight:700;}
+  .btn.no{background:#241f2e;border:1px solid #4a3f57;color:var(--ink-dim);}
+
+  .memo{width:min(980px,96vw);background:var(--panel);border:1px solid #2e2738;border-radius:8px;
+    padding:12px 14px;font-size:12px;line-height:1.7;color:var(--ink-dim);}
+  .memo h3{color:var(--ink);font-size:13px;margin-bottom:6px;} .memo .t{color:#d9b04d;}
+</style>
+</head>
+<body>
+
+  <div class="stage">
+    <div class="head">
+      <div class="ic">🔨</div>
+      <div class="title">카드 강화</div>
+      <div class="sub">강화할 카드 1장을 선택</div>
+      <div class="close">✕ 취소</div>
+    </div>
+
+    <div class="content">
+      <!-- 좌: 덱 전체 그리드 -->
+      <div class="grid-wrap">
+        <div class="grid">
+
+          <!-- 선택된 카드 (마력탄) -->
+          <div class="card sel">
+            <span class="cb atk">1</span>
+            <div class="art aoe">💥</div>
+            <div class="cn">마력탄</div>
+            <div class="ce">광역 18 · 1초</div>
+          </div>
+          <div class="card">
+            <span class="cb atk">1</span>
+            <div class="art single">✨</div>
+            <div class="cn">매직미사일</div>
+            <div class="ce">단일 12 · 즉발</div>
+          </div>
+          <!-- 이미 강화됨 (+1) -->
+          <div class="card rare">
+            <span class="cb atk">2</span><span class="lv">+1</span>
+            <div class="art aoe">⚡</div>
+            <div class="cn">체인라이트닝</div>
+            <div class="ce">광역 34 · 1.5초</div>
+          </div>
+          <div class="card">
+            <span class="cb skill">1</span>
+            <div class="art single">🛡️</div>
+            <div class="cn">베리어</div>
+            <div class="ce">흡수 30 · 즉발</div>
+          </div>
+          <div class="card rare">
+            <span class="cb skill">2</span>
+            <div class="art single">🔰</div>
+            <div class="cn">마나실드</div>
+            <div class="ce">흡수 60 · 즉발</div>
+          </div>
+          <div class="card">
+            <span class="cb skill">1</span>
+            <div class="art single">🧠</div>
+            <div class="cn">신속한 사고</div>
+            <div class="ce">드로우 +2</div>
+          </div>
+          <div class="card rare">
+            <span class="cb skill">2</span>
+            <div class="art aoe">❄️</div>
+            <div class="cn">냉기폭발</div>
+            <div class="ce">광역 12 + 슬로우</div>
+          </div>
+          <!-- 영웅 -->
+          <div class="card epic">
+            <span class="cb atk">3</span>
+            <div class="art aoe">☄️</div>
+            <div class="cn">메테오</div>
+            <div class="ce">조준 광역 45 · 3초</div>
+          </div>
+          <!-- 전설 (강화 불가 예시) -->
+          <div class="card legend locked">
+            <span class="cb skill">1</span>
+            <div class="art single">🔆</div>
+            <div class="cn">집중</div>
+            <div class="ce">데미지+50%(소진)</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 우: 강화 미리보기 -->
+      <div class="side">
+        <h4>강화 미리보기</h4>
+        <div class="preview">
+          <div class="pn">마력탄 <span style="color:var(--power)">+1</span></div>
+          <div class="diff diff-row"><span class="from">데미지 18</span><span class="arrow">→</span><span class="to">24</span></div>
+          <div class="diff diff-row"><span class="from">시전 1.0초</span><span class="arrow">→</span><span class="to">1.0초</span></div>
+        </div>
+        <div class="desc">강화는 이 카드 1장에 영구 적용 (런 동안 유지).<br>※ 강화 경로(수치↑ / 코스트↓ / 키워드 등)는 TBD.</div>
+        <div class="actions">
+          <div class="btn ok">이 카드 강화 [E]</div>
+          <div class="btn no">취소</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="memo">
+    <h3>의도 / 적용 연결 (게임엔 없음)</h3>
+    <div>① '카드 고르기'(강화/제거/획득)는 작은 팝업 X → 전체 덱을 보는 <b>그리드 페이지</b>(오버레이).</div>
+    <div>② 카드 = CardInstance 단위로 전부 표시(중복도 각각). 등급 테두리·강화 +Lv 뱃지 유지.</div>
+    <div>③ 선택 → 우측 강화 전후 미리보기 → 확정 시 <b>CardInstance.bonusDamage/upgradeLevel 적용</b>(CARD_SYSTEM).</div>
+    <div>④ 같은 틀 재사용: 제거(고른 카드 삭제) / 보상(제시된 카드 중 획득) / 덱 보기(읽기전용).</div>
+    <div class="t">※ 임시 · 다음: 강화 경로 규칙(수치/코스트/키워드) 결정 → Unity 그리드 구현</div>
+  </div>
+
+</body>
+</html>

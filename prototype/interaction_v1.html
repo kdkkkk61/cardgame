@@ -121,20 +121,19 @@
       무거움 → 큰 중앙 패널
     </div>
 
-    <!-- 제단 (왼쪽) + 작은 인월드 팝업 열림 -->
+    <!-- 치유의 샘 (왼쪽) + 작은 인월드 팝업 열림 -->
     <div class="obj altar">
-      <div class="body">🔨</div>
-      <div class="tag">제단</div>
+      <div class="body">⛲</div>
+      <div class="tag">치유의 샘</div>
     </div>
     <div class="inworld">
-      <div class="iw-title">🔨 제단 — 카드 강화</div>
-      <div class="iw-sub">한 장을 골라 영구 강화 (대화 없음)</div>
+      <div class="iw-title">⛲ 치유의 샘</div>
+      <div class="iw-sub">정말 단순한 1선택만 인월드 팝업 (대화 없음)</div>
       <div class="iw-cards">
-        <div class="iw-card sel">마력탄<span class="up">18→24</span></div>
-        <div class="iw-card">베리어<span class="up">30→40</span></div>
+        <div class="iw-card sel">회복<span class="up">HP +40</span></div>
       </div>
       <div class="iw-row">
-        <div class="iw-btn ok">강화 [E]</div>
+        <div class="iw-btn ok">사용 [E]</div>
         <div class="iw-btn no">취소</div>
       </div>
     </div>
@@ -157,10 +156,10 @@
   <div class="memo">
     <h3>하이브리드 규칙 / 의도 (게임엔 없음)</h3>
     <div>① <b>씬 전환 없음</b> — 전부 톱다운 월드 위 오버레이. 베이스 화면 유지.</div>
-    <div>② <b>가벼운 상호작용</b>(제단 강화·상인 인사) = 대상 옆 작은 팝업, 대사 없음, 1~2선택.</div>
-    <div>③ <b>무거운 상호작용</b>(리치 NPC·상점·카드보상) = 큰 중앙 패널 + 배경 어둡게 (dialogue_v1.html).</div>
-    <div>④ 공통: 근접 시 대상 위 <span class="t">[E] 프롬프트</span> → 누르면 둘 중 하나 열림.</div>
-    <div>⑤ 제단 강화 = CardInstance에 +강화 / NPC 축복 = PlayerState 모디파이어 (CARD_SYSTEM 적용 로직).</div>
+    <div>② <b>가벼운 상호작용</b>(치유의 샘·상인 인사) = 대상 옆 작은 팝업, 대사 없음, 1선택.</div>
+    <div>③ <b>카드 고르기</b>(강화/획득/제거) = 전용 그리드 페이지(card_upgrade_v1.html). 작은 팝업 X.</div>
+    <div>④ <b>리치 NPC·이벤트</b> = 큰 중앙 패널(dialogue_v1.html) + 배경 어둡게.</div>
+    <div>⑤ 공통: 근접 시 대상 위 <span class="t">[E] 프롬프트</span> → 위 ②③④ 중 하나 열림.</div>
     <div class="t">※ 임시 배치 · 다음: 어느 케이스를 작은 팝업/큰 패널로 둘지 목록화 → Unity 구현</div>
   </div>
 
