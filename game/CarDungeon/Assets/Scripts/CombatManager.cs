@@ -17,7 +17,6 @@ namespace CarDungeon
         public const int MaxHand = 10;
         public const int DrawPerCycle = 5;
         public const int MaxPlayerHP = 120;
-        public const float BaseCycleTime = 10f; // 패턴 A 기준
 
         // --- 상태 ---
         public CombatState state = CombatState.Fighting;

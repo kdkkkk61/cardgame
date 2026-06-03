@@ -75,15 +75,6 @@ namespace CarDungeon
                     if (kb.digit4Key.wasPressedThisFrame) mgr.PlayCard(3);
                     if (kb.digit5Key.wasPressedThisFrame) mgr.PlayCard(4);
                 }
-                // [디버그] 적용 파이프라인 검증용 — 나중에 제거
-                if (kb.bKey.wasPressedThisFrame)   // 전투 데미지 +20% 버프 추가(누적)
-                    mgr.playerState.Add(new Modifier(ModStat.DamageMult, 0.2f, ModScope.Combat, -1, "디버그"));
-                if (kb.uKey.wasPressedThisFrame && mgr.hand.Count > 0) // 손패 첫 카드 강화(+6뎀)
-                {
-                    var card = mgr.hand[0];
-                    card.bonusDamage += 6; card.upgradeLevel++;
-                    mgr.lastLog = $"[디버그] {card.name} 강화 → +{card.bonusDamage}뎀 (Lv{card.upgradeLevel})";
-                }
             }
             if (kb != null && mgr.state != CombatState.Fighting && kb.rKey.wasPressedThisFrame)
             {
@@ -183,7 +174,7 @@ namespace CarDungeon
             DrawTex(r, Tex.Ring(), line);
         }
 
-        // ── 하단 안내 (조준 중 조작) + 디버그 버프 상태 ──
+        // ── 하단 안내(조준 중) + 활성 버프 표시 ──
         void DrawToggles(float W, float H)
         {
             if (mgr.IsAiming)
@@ -191,12 +182,17 @@ namespace CarDungeon
                     "조준 중: 좌클릭 = 낙하 확정 / 우클릭 = 취소",
                     new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter });
 
-            // [디버그] 적용 파이프라인 확인용 — 나중에 제거
-            float dmgMult = 1f + mgr.playerState.Sum(ModStat.DamageMult);
-            float dmgFlat = mgr.playerState.Sum(ModStat.DamageFlat);
-            string buff = $"[디버그] 데미지 ×{dmgMult:0.0} +{dmgFlat:0}  (버프 {mgr.playerState.mods.Count}개)  |  B:+20%  U:강화";
-            GUI.Label(new Rect(12, 110, 460, 16), buff,
-                new GUIStyle(_dim) { normal = { textColor = new Color(0.6f, 0.85f, 0.6f) } });
+            // 활성 버프(파워카드 등)가 있으면 좌측에 요약 표시
+            if (mgr.playerState.mods.Count > 0)
+            {
+                float dmgMult = 1f + mgr.playerState.Sum(ModStat.DamageMult);
+                string s = "버프:";
+                if (dmgMult > 1f) s += $" 데미지 ×{dmgMult:0.0}";
+                float dmgFlat = mgr.playerState.Sum(ModStat.DamageFlat);
+                if (dmgFlat > 0f) s += $" +{dmgFlat:0}뎀";
+                GUI.Label(new Rect(12, 110, 460, 16), s,
+                    new GUIStyle(_dim) { normal = { textColor = new Color(0.6f, 0.85f, 0.6f) } });
+            }
         }
 
         // ── 자동명중 확정타 텔레그래프: 공격 임박 시 캐릭터 둘레 빨간 링 ──
@@ -396,10 +392,10 @@ namespace CarDungeon
             GUI.Label(new Rect(rect.x, art.yMax + 4 * scale, w, 16 * scale), nm,
                 new GUIStyle(_cardName) { fontSize = Mathf.RoundToInt(11 * scale) });
 
-            // 효과(호버 시) + 단축키
+            // 효과(호버 시) + 등급
             if (hover)
-                GUI.Label(new Rect(rect.x + 4, art.yMax + 22 * scale, w - 8, 40 * scale),
-                    $"{(c.castTime <= 0 ? "즉발" : c.castTime + "초")} · {c.desc}",
+                GUI.Label(new Rect(rect.x + 4, art.yMax + 22 * scale, w - 8, 44 * scale),
+                    $"[{CardDefinition.RarityName(c.def.rarity)}] {(c.castTime <= 0 ? "즉발" : c.castTime + "초")}\n{c.desc}",
                     new GUIStyle(_dim) { alignment = TextAnchor.UpperCenter, wordWrap = true,
                         fontSize = Mathf.RoundToInt(9 * scale) });
             if (index < 5)
@@ -552,7 +548,7 @@ namespace CarDungeon
     /// <summary>IMGUI용 런타임 생성 텍스처 캐시.</summary>
     static class Tex
     {
-        static Texture2D _white, _circle, _ring, _round, _hatch;
+        static Texture2D _white, _circle, _ring, _hatch;
         static Texture2D[] _radial = new Texture2D[21];
 
         public static Texture2D White()
@@ -590,11 +586,6 @@ namespace CarDungeon
                 t.SetPixel(x, y, on ? Color.white : Color.clear);
             }
             t.Apply(); return t;
-        }
-        public static Texture2D Round()  // 모서리 둥근 사각(근사: 그냥 솔리드)
-        {
-            if (_round == null) _round = Solid(1, Color.white);
-            return _round;
         }
 
         // 9-슬라이스용 둥근 사각 (안티앨리어싱). border = 코너 반지름(10)
