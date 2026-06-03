@@ -75,6 +75,15 @@ namespace CarDungeon
                     if (kb.digit4Key.wasPressedThisFrame) mgr.PlayCard(3);
                     if (kb.digit5Key.wasPressedThisFrame) mgr.PlayCard(4);
                 }
+                // [디버그] 적용 파이프라인 검증용 — 나중에 제거
+                if (kb.bKey.wasPressedThisFrame)   // 데미지 +20% 토글
+                    mgr.playerState.damageMult = mgr.playerState.damageMult > 1f ? 1f : 1.2f;
+                if (kb.uKey.wasPressedThisFrame && mgr.hand.Count > 0) // 손패 첫 카드 강화(+6뎀)
+                {
+                    var card = mgr.hand[0];
+                    card.bonusDamage += 6; card.upgradeLevel++;
+                    mgr.lastLog = $"[디버그] {card.name} 강화 → +{card.bonusDamage}뎀 (Lv{card.upgradeLevel})";
+                }
             }
             if (kb != null && mgr.state != CombatState.Fighting && kb.rKey.wasPressedThisFrame)
             {
@@ -174,13 +183,18 @@ namespace CarDungeon
             DrawTex(r, Tex.Ring(), line);
         }
 
-        // ── 하단 안내 (조준 중 조작) ──
+        // ── 하단 안내 (조준 중 조작) + 디버그 버프 상태 ──
         void DrawToggles(float W, float H)
         {
-            if (!mgr.IsAiming) return;
-            GUI.Label(new Rect(W / 2 - 280, H - 20, 560, 18),
-                "조준 중: 좌클릭 = 낙하 확정 / 우클릭 = 취소",
-                new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter });
+            if (mgr.IsAiming)
+                GUI.Label(new Rect(W / 2 - 280, H - 20, 560, 18),
+                    "조준 중: 좌클릭 = 낙하 확정 / 우클릭 = 취소",
+                    new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter });
+
+            // [디버그] 적용 파이프라인 확인용 — 나중에 제거
+            string buff = $"[디버그] B:데미지×{mgr.playerState.damageMult:0.0}  U:손패첫장강화";
+            GUI.Label(new Rect(12, 110, 400, 16), buff,
+                new GUIStyle(_dim) { normal = { textColor = new Color(0.6f, 0.85f, 0.6f) } });
         }
 
         // ── 자동명중 확정타 텔레그래프: 공격 임박 시 캐릭터 둘레 빨간 링 ──
@@ -203,18 +217,18 @@ namespace CarDungeon
         {
             float x = 16, y = 14, w = 240;
             GUI.Label(new Rect(x, y, w, 18),
-                $"<size=11>HP</size>  <b>{mgr.playerHP} / {CombatManager.MaxPlayerHP}</b>" +
+                $"<size=11>HP</size>  <b>{mgr.playerHP} / {mgr.MaxHp}</b>" +
                 (mgr.barrier > 0 ? $"  <color=#8fb7d6>(+{mgr.barrier})</color>" : ""), _num);
 
             var bar = new Rect(x, y + 22, w, 16);
             DrawTex(bar, Tex.White(), new Color(0.141f, 0.114f, 0.161f));
-            float hpR = (float)mgr.playerHP / CombatManager.MaxPlayerHP;
+            float hpR = (float)mgr.playerHP / mgr.MaxHp;
             DrawTex(new Rect(bar.x, bar.y, bar.width * hpR, bar.height), Tex.White(), C_hp);
 
             // 베리어: 우측 끝 빗금 구간
             if (mgr.barrier > 0)
             {
-                float br = Mathf.Clamp01((float)mgr.barrier / CombatManager.MaxPlayerHP);
+                float br = Mathf.Clamp01((float)mgr.barrier / mgr.MaxHp);
                 var brRect = new Rect(bar.xMax - bar.width * br, bar.y, bar.width * br, bar.height);
                 DrawTex(brRect, Tex.Hatch(), C_barrier);
             }
@@ -222,7 +236,7 @@ namespace CarDungeon
             int incoming = mgr.PreviewIncoming();
             if (incoming > 0 && mgr.playerHP > 0)
             {
-                float after = Mathf.Max(0, mgr.playerHP - incoming) / (float)CombatManager.MaxPlayerHP;
+                float after = Mathf.Max(0, mgr.playerHP - incoming) / (float)mgr.MaxHp;
                 float blink = 0.3f + 0.45f * (Mathf.Sin(Time.time * 6f) * 0.5f + 0.5f);
                 DrawTex(new Rect(bar.x + bar.width * after, bar.y, bar.width * (hpR - after), bar.height),
                     Tex.White(), new Color(C_danger.r, C_danger.g, C_danger.b, blink));
@@ -345,7 +359,7 @@ namespace CarDungeon
             }
         }
 
-        void DrawCard(CardData c, int index, float cx, float cy, float rot, float scale, bool hover)
+        void DrawCard(CardInstance c, int index, float cx, float cy, float rot, float scale, bool hover)
         {
             const float CW = 104, CH = 144;
             float w = CW * scale, h = CH * scale;
@@ -374,8 +388,9 @@ namespace CarDungeon
             GUI.Label(art, c.shape == CardShape.Circle ? "단일" : "광역",
                 new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(10 * scale) });
 
-            // 이름
-            GUI.Label(new Rect(rect.x, art.yMax + 4 * scale, w, 16 * scale), c.name,
+            // 이름 (강화 시 +Lv 표시)
+            string nm = c.upgradeLevel > 0 ? $"{c.name} <color=#e0c24d>+{c.upgradeLevel}</color>" : c.name;
+            GUI.Label(new Rect(rect.x, art.yMax + 4 * scale, w, 16 * scale), nm,
                 new GUIStyle(_cardName) { fontSize = Mathf.RoundToInt(11 * scale) });
 
             // 효과(호버 시) + 단축키

@@ -28,10 +28,14 @@ namespace CarDungeon
         public float cycleLength;
         public int cycleCount = 0;
 
-        public List<CardData> deck = new();
-        public List<CardData> hand = new();
-        public List<CardData> discard = new();
+        public List<CardInstance> deck = new();
+        public List<CardInstance> hand = new();
+        public List<CardInstance> discard = new();
         public List<CastEntry> queue = new();
+
+        // 런 전체 버프/스탯 (CARD_SYSTEM.md). 강화·NPC·유품이 전부 여기로 모임.
+        public PlayerState playerState = new();
+        public int MaxHp => MaxPlayerHP + playerState.maxHpBonus;
 
         // 보스 패턴 2종 (MAGE_PROTOTYPE 4) — 번갈아
         public enum BossPattern { MagicBurst, FireFloor }
@@ -47,7 +51,7 @@ namespace CarDungeon
         public const float MeteorRadius = 1.6f;
         public bool IsAiming;
         public Vector2 aimPos;
-        CardData _aimCard;
+        CardInstance _aimCard;
 
         // [설계 의도] 조준 카드(메테오 등)는 위치를 찍는 동안 손이 묶여 자동 카드보다 불리.
         //   그 불리함의 보상 = "조준 시작 순간 0.7초간 화면 슬로우(속도 70%)" 한 번뿐(B안 확정).
@@ -79,8 +83,10 @@ namespace CarDungeon
             this.boss = boss;
             if (boss != null && player != null) boss.target = player.transform;
             Time.timeScale = 1f; // 조준 슬로우 잔여 방지
-            playerHP = MaxPlayerHP;
-            deck = CardData.BuildPrototypeDeck();
+            playerHP = MaxHp;
+            // 정의(불변) → 인스턴스(가변)로 덱 구성. 강화는 인스턴스에 쌓임.
+            deck = new List<CardInstance>();
+            foreach (var def in CardDefinition.Catalog()) deck.Add(new CardInstance(def));
             Shuffle(deck);
             pattern = BossPattern.FireFloor; // StartCycle에서 토글 → 첫 패턴 MagicBurst
             StartCycle();
@@ -160,8 +166,8 @@ namespace CarDungeon
             // 손패 디스카드 → 5장 드로우 → 코스트 풀회복
             discard.AddRange(hand);
             hand.Clear();
-            cost = MaxCost;
-            DrawCards(DrawPerCycle);
+            cost = MaxCost + playerState.costBonus;          // 버프로 코스트 상한 확장 가능
+            DrawCards(DrawPerCycle + playerState.drawBonus); // 버프로 드로우 증가 가능
 
             // [의도] 패턴을 번갈아 → 같은 보스라도 사이클 시간/대응이 달라짐(CORE_COMBAT 축2).
             //   A 마력폭발=긴 사이클(준비 시간) / B 화염장판=짧은 사이클(긴급 회피).
@@ -237,7 +243,7 @@ namespace CarDungeon
             }
         }
 
-        public bool CanPlay(CardData c) => state == CombatState.Fighting && cost >= c.cost;
+        public bool CanPlay(CardInstance c) => state == CombatState.Fighting && cost >= c.cost;
 
         public void PlayCard(int handIndex)
         {
@@ -298,15 +304,20 @@ namespace CarDungeon
         void ResolveEntry(CastEntry e)
         {
             var c = e.card;
-            if (c.absorb > 0) barrier += c.absorb;
-            if (c.drawCount > 0) DrawCards(c.drawCount);
+            // [의도] 효과 수치는 '반드시' 파이프라인(CardMath)으로 → 강화·버프가 자동 반영.
+            int dmg = CardMath.Damage(c, playerState);
+            int absorb = CardMath.Absorb(c, playerState);
+            int draw = CardMath.DrawCount(c);
+            float slow = CardMath.Slow(c);
+
+            if (absorb > 0) barrier += absorb;
+            if (draw > 0) DrawCards(draw);
 
             // [의도] 메테오(조준) = 마법사의 '수싸움' 카드. 찍은 자리에 3초 뒤 낙하 →
             //   보스가 그 사이 빠져나가면 헛방. 그래서 냉기폭발(슬로우)로 묶고 쏘는 콤보가 핵심.
             //   "슬로우 안 걸고 깔면 헛방"이 학습 포인트(MAGE_PROTOTYPE §3).
             if (c.aimed) // 메테오 — 조준 지점에 낙하, 보스가 그 안에 있어야 명중
             {
-                int dmg = c.damage;
                 Vector3 from = new Vector3(e.targetPos.x, e.targetPos.y + 6f, 0);
                 Projectile.Spawn(from, e.targetPos, new Color(1f, 0.6f, 0.3f), 20f, () =>
                 {
@@ -324,10 +335,8 @@ namespace CarDungeon
                 return;
             }
 
-            if (c.damage > 0 && boss != null)
+            if (dmg > 0 && boss != null)
             {
-                int dmg = c.damage;
-                float slow = c.slowSeconds;
                 Vector3 from = player != null ? player.transform.position : Vector3.zero;
                 Color col = c.type == CardType.Attack
                     ? new Color(1f, 0.55f, 0.45f) : new Color(0.55f, 0.82f, 1f);
@@ -340,9 +349,9 @@ namespace CarDungeon
                     onDamageDealt?.Invoke(dmg);
                 });
             }
-            else if (c.slowSeconds > 0 && boss != null)
+            else if (slow > 0 && boss != null)
             {
-                boss.ApplySlow(c.slowSeconds);
+                boss.ApplySlow(slow);
             }
             discard.Add(c);
         }
