@@ -371,9 +371,10 @@ namespace CarDungeon
                 GUIUtility.RotateAroundPivot(rot, new Vector2(cx, cy + h));
 
             bool playable = mgr.CanPlay(c);
-            // 카드 바탕 (둥근 사각 + AA)
+            // 카드 바탕 (둥근 사각 + AA). 테두리 = 등급 색(호버 시 밝게)
+            Color rc = CardDefinition.RarityColor(c.def.rarity);
             DrawRound(rect, new Color(0.169f, 0.141f, 0.200f, playable ? 0.98f : 0.7f),
-                hover ? new Color(0.541f, 0.478f, 0.651f) : new Color(0.290f, 0.247f, 0.341f));
+                hover ? Color.Lerp(rc, Color.white, 0.4f) : rc);
 
             // 일러스트 슬롯 (모양 = 정보축)
             float artS = 50 * scale;
