@@ -174,7 +174,7 @@ namespace CarDungeon
         // ── 실험 토글 상태 (슬로우 A/B/C/D · 보스 이동) ──
         void DrawToggles(float W, float H)
         {
-            string[] slow = { "A 시간+2초", "B 슬로우50%", "C 일시정지", "D 없음" };
+            string[] slow = { "A 시간+2초", "B 슬로우50%(0.5s)", "C 정지(0.5s)", "D 없음" };
             string sm = slow[(int)mgr.slowMode];
             string bm = mgr.boss != null && mgr.boss.moveMode == Boss.MoveMode.Chase ? "추적" : "정주";
             string aim = mgr.IsAiming ? "   |   조준 중: 좌클릭=낙하 / 우클릭=취소" : "";

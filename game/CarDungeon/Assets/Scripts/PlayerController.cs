@@ -11,7 +11,8 @@ namespace CarDungeon
     {
         public float speed = 5f;
         public Vector2 arenaHalf = new Vector2(7.5f, 4.2f);
-        public bool movementLocked = false; // 조준 중 무빙 불가(Slice 2)
+        public bool movementLocked = false; // 완전 정지(예약용)
+        public float moveScale = 1f;        // 조준 중 저속 이동 등 배율
 
         void Update()
         {
@@ -26,7 +27,7 @@ namespace CarDungeon
             if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) dir.x += 1;
 
             if (dir.sqrMagnitude > 1f) dir.Normalize();
-            Vector3 p = transform.position + (Vector3)(dir * speed * Time.deltaTime);
+            Vector3 p = transform.position + (Vector3)(dir * speed * moveScale * Time.deltaTime);
             p.x = Mathf.Clamp(p.x, -arenaHalf.x, arenaHalf.x);
             p.y = Mathf.Clamp(p.y, -arenaHalf.y, arenaHalf.y);
             transform.position = p;

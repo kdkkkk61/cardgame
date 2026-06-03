@@ -53,6 +53,9 @@ namespace CarDungeon
         public enum SlowMode { A_AddTime, B_Slow, C_Pause, D_None }
         public SlowMode slowMode = SlowMode.B_Slow;
         public const float AimAddTime = 2f;
+        public const float AimSlowDuration = 0.5f;  // 슬로우/정지 지속 시간(짧게)
+        public const float AimMoveScale = 0.4f;     // 조준 중 저속 이동 배율
+        float _aimSlowTimer = 0f;
 
         public PlayerController player;
         public Boss boss;
@@ -79,6 +82,13 @@ namespace CarDungeon
         void Update()
         {
             if (state != CombatState.Fighting) return;
+
+            // 조준 슬로우/정지는 0.5초만 (실시간) 후 정상 속도 복귀 (조준은 계속)
+            if (_aimSlowTimer > 0f)
+            {
+                _aimSlowTimer -= Time.unscaledDeltaTime;
+                if (_aimSlowTimer <= 0f) Time.timeScale = 1f;
+            }
 
             // 큐(시전중) 진행
             for (int i = queue.Count - 1; i >= 0; i--)
@@ -203,12 +213,12 @@ namespace CarDungeon
             var c = hand[handIndex];
             if (!CanPlay(c)) return;
             IsAiming = true; _aimCard = c;
-            if (player != null) player.movementLocked = true; // 조준 중 무빙 불가
+            if (player != null) player.moveScale = AimMoveScale; // 조준 중 저속 이동
             switch (slowMode)
             {
                 case SlowMode.A_AddTime: cycleTimer += AimAddTime; break;
-                case SlowMode.B_Slow: Time.timeScale = 0.5f; break;
-                case SlowMode.C_Pause: Time.timeScale = 0f; break;
+                case SlowMode.B_Slow: Time.timeScale = 0.5f; _aimSlowTimer = AimSlowDuration; break;
+                case SlowMode.C_Pause: Time.timeScale = 0f; _aimSlowTimer = AimSlowDuration; break;
                 case SlowMode.D_None: break;
             }
         }
@@ -231,8 +241,9 @@ namespace CarDungeon
         void EndAimState()
         {
             IsAiming = false;
+            _aimSlowTimer = 0f;
             Time.timeScale = 1f;
-            if (player != null) player.movementLocked = false;
+            if (player != null) { player.moveScale = 1f; player.movementLocked = false; }
         }
 
         public void CycleSlowMode()
