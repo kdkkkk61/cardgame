@@ -32,6 +32,7 @@ namespace CarDungeon
         struct DmgPop { public int val; public Vector3 world; public float age; }
         readonly System.Collections.Generic.List<DmgPop> _pops = new();
         float _castPulse = 0f;
+        float _hurtFlash = 0f;
         bool _subscribed;
         int _sortMode = 0; // 0=드로우순 1=코스트순 2=타입순
 
@@ -40,8 +41,9 @@ namespace CarDungeon
             if (mgr == null) return;
             EnsureSubscribed();
 
-            // FX 수명 갱신
-            if (_castPulse > 0f) _castPulse -= Time.deltaTime * 2.2f;
+            // FX 수명 갱신 (unscaled — 조준 슬로우 중에도 일정)
+            if (_castPulse > 0f) _castPulse -= Time.unscaledDeltaTime * 2.2f;
+            if (_hurtFlash > 0f) _hurtFlash -= Time.unscaledDeltaTime * 2f;
             for (int i = _pops.Count - 1; i >= 0; i--)
             {
                 var p = _pops[i]; p.age += Time.deltaTime; _pops[i] = p;
@@ -91,8 +93,10 @@ namespace CarDungeon
             if (_subscribed || mgr == null) return;
             mgr.onDamageDealt += OnDamage;
             mgr.onCardCast += OnCast;
+            mgr.onPlayerHit += OnHurt;
             _subscribed = true;
         }
+        void OnHurt() { _hurtFlash = 1f; }
         void OnDamage(int dmg)
         {
             if (mgr.boss != null)
@@ -133,6 +137,9 @@ namespace CarDungeon
             DrawHand(W, H);           // 하단 중앙 (부채꼴)
             DrawDeckArea(W, H);       // 하단 우
             DrawFX();                 // 데미지 숫자 / 시전 펄스
+            if (_hurtFlash > 0f)      // 피격 시 화면 가장자리 붉게
+                DrawTex(new Rect(0, 0, W, H), Tex.White(),
+                    new Color(0.7f, 0.05f, 0.05f, _hurtFlash * 0.28f));
             DrawToggles(W, H);        // 슬로우/보스이동 실험 토글
             DrawLog(W, H);
             DrawResult(W, H);
@@ -174,8 +181,8 @@ namespace CarDungeon
         // ── 실험 토글 상태 (슬로우 A/B/C/D · 보스 이동) ──
         void DrawToggles(float W, float H)
         {
-            string[] slow = { "A 시간+2초", "B 슬로우50%(0.5s)", "C 정지(0.5s)", "D 없음" };
-            string sm = slow[(int)mgr.slowMode];
+            int p = mgr.aimPreset;
+            string sm = $"{CombatManager.AimSlowDur[p]}s @ 속도{Mathf.RoundToInt(CombatManager.AimSlowScale[p] * 100)}%";
             string bm = mgr.boss != null && mgr.boss.moveMode == Boss.MoveMode.Chase ? "추적" : "정주";
             string aim = mgr.IsAiming ? "   |   조준 중: 좌클릭=낙하 / 우클릭=취소" : "";
             GUI.Label(new Rect(W / 2 - 280, H - 20, 560, 18),

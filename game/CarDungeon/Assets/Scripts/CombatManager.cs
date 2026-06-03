@@ -49,11 +49,10 @@ namespace CarDungeon
         public Vector2 aimPos;
         CardData _aimCard;
 
-        // 슬로우 A/B/C/D 실험
-        public enum SlowMode { A_AddTime, B_Slow, C_Pause, D_None }
-        public SlowMode slowMode = SlowMode.B_Slow;
-        public const float AimAddTime = 2f;
-        public const float AimSlowDuration = 0.5f;  // 슬로우/정지 지속 시간(짧게)
+        // 조준 슬로우(B 확정) — 지속/세기 튜닝용 프리셋 비교 (Z로 전환)
+        public static readonly float[] AimSlowDur   = { 0.7f, 0.5f, 0.7f, 0.5f };
+        public static readonly float[] AimSlowScale = { 0.5f, 0.5f, 0.7f, 0.7f }; // 화면 속도 비율
+        public int aimPreset = 0;
         public const float AimMoveScale = 0.4f;     // 조준 중 저속 이동 배율
         float _aimSlowTimer = 0f;
 
@@ -61,9 +60,16 @@ namespace CarDungeon
         public Boss boss;
         public string lastLog = "";
 
+        // 접촉 데미지 (보스에 닿으면 — 추적 보스의 거리관리 압박)
+        public const int ContactDamage = 8;
+        public const float ContactRadius = 0.95f;
+        public const float ContactInvuln = 0.8f;
+        public const float ContactKnockback = 4f;
+
         // FX 이벤트 (HUD가 구독)
         public event System.Action<int> onDamageDealt; // 보스 피격 데미지
         public event System.Action onCardCast;         // 카드 사용 순간
+        public event System.Action onPlayerHit;        // 플레이어 피격(화면 붉게)
         int _drawCounter = 0;
 
         public void Init(PlayerController player, Boss boss)
@@ -98,6 +104,19 @@ namespace CarDungeon
                 {
                     ResolveEntry(queue[i]);
                     queue.RemoveAt(i);
+                }
+            }
+
+            // 보스 접촉 데미지 (무적 아닐 때만 + 넉백)
+            if (boss != null && player != null && !player.IsInvuln)
+            {
+                Vector2 pp = player.transform.position, bp = boss.transform.position;
+                if ((pp - bp).sqrMagnitude <= ContactRadius * ContactRadius)
+                {
+                    playerHP = Mathf.Max(0, playerHP - ContactDamage);
+                    player.HitReact(pp - bp, ContactKnockback, ContactInvuln);
+                    onPlayerHit?.Invoke();
+                    lastLog = $"보스와 충돌! -{ContactDamage}";
                 }
             }
 
@@ -143,6 +162,7 @@ namespace CarDungeon
                 barrier -= absorbed;
                 int taken = dmg - absorbed;
                 playerHP = Mathf.Max(0, playerHP - taken);
+                if (taken > 0) onPlayerHit?.Invoke();
                 lastLog = $"마력폭발! {dmg} (흡수 {absorbed} / 피해 {taken})";
             }
             else
@@ -153,6 +173,7 @@ namespace CarDungeon
                 if (inside)
                 {
                     playerHP = Mathf.Max(0, playerHP - FireFloorDmg);
+                    onPlayerHit?.Invoke();
                     lastLog = $"화염 장판 적중! -{FireFloorDmg} (영역 못 벗어남)";
                 }
                 else lastLog = "화염 장판 회피 성공!";
@@ -214,13 +235,8 @@ namespace CarDungeon
             if (!CanPlay(c)) return;
             IsAiming = true; _aimCard = c;
             if (player != null) player.moveScale = AimMoveScale; // 조준 중 저속 이동
-            switch (slowMode)
-            {
-                case SlowMode.A_AddTime: cycleTimer += AimAddTime; break;
-                case SlowMode.B_Slow: Time.timeScale = 0.5f; _aimSlowTimer = AimSlowDuration; break;
-                case SlowMode.C_Pause: Time.timeScale = 0f; _aimSlowTimer = AimSlowDuration; break;
-                case SlowMode.D_None: break;
-            }
+            Time.timeScale = AimSlowScale[aimPreset];            // 조준 시작 슬로우 버스트
+            _aimSlowTimer = AimSlowDur[aimPreset];
         }
 
         public void ConfirmAim(Vector2 worldPos)
@@ -248,7 +264,7 @@ namespace CarDungeon
 
         public void CycleSlowMode()
         {
-            slowMode = (SlowMode)(((int)slowMode + 1) % 4);
+            aimPreset = (aimPreset + 1) % AimSlowDur.Length;
         }
 
         void ResolveEntry(CastEntry e)
