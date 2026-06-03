@@ -76,8 +76,8 @@ namespace CarDungeon
                     if (kb.digit5Key.wasPressedThisFrame) mgr.PlayCard(4);
                 }
                 // [디버그] 적용 파이프라인 검증용 — 나중에 제거
-                if (kb.bKey.wasPressedThisFrame)   // 데미지 +20% 토글
-                    mgr.playerState.damageMult = mgr.playerState.damageMult > 1f ? 1f : 1.2f;
+                if (kb.bKey.wasPressedThisFrame)   // 전투 데미지 +20% 버프 추가(누적)
+                    mgr.playerState.Add(new Modifier(ModStat.DamageMult, 0.2f, ModScope.Combat, -1, "디버그"));
                 if (kb.uKey.wasPressedThisFrame && mgr.hand.Count > 0) // 손패 첫 카드 강화(+6뎀)
                 {
                     var card = mgr.hand[0];
@@ -192,8 +192,10 @@ namespace CarDungeon
                     new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter });
 
             // [디버그] 적용 파이프라인 확인용 — 나중에 제거
-            string buff = $"[디버그] B:데미지×{mgr.playerState.damageMult:0.0}  U:손패첫장강화";
-            GUI.Label(new Rect(12, 110, 400, 16), buff,
+            float dmgMult = 1f + mgr.playerState.Sum(ModStat.DamageMult);
+            float dmgFlat = mgr.playerState.Sum(ModStat.DamageFlat);
+            string buff = $"[디버그] 데미지 ×{dmgMult:0.0} +{dmgFlat:0}  (버프 {mgr.playerState.mods.Count}개)  |  B:+20%  U:강화";
+            GUI.Label(new Rect(12, 110, 460, 16), buff,
                 new GUIStyle(_dim) { normal = { textColor = new Color(0.6f, 0.85f, 0.6f) } });
         }
 

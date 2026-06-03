@@ -83,6 +83,28 @@ Definition을 가리키면서 + "이 한 장만의 수정 상태"를 가짐.
 
 ---
 
+## 3.5 버프의 '지속 범위(scope)' — 모디파이어 시스템 (구현됨)
+
+버프는 고정값이 아니라 **Modifier 단위**로 PlayerState에 쌓인다. 각 Modifier는 **언제 사라지는가**가 다름:
+
+```
+Modifier { 무엇을(ModStat) / 얼마나(value) / 범위(scope) / 횟수(charges) }
+
+scope:
+  Run        런 전체 (유품·영구강화)
+  Combat     이 전투 동안     ← ★ 파워 카드 (예: "집중 = 전투 동안 데미지 +50%")
+  Cycle      이번 사이클만
+  NextCard   다음 카드 1장    ← ★ "다음 카드 강화" (charges=1, 쓰면 소멸)
+  NextAttack 다음 공격 1회
+```
+
+소멸 규칙:
+- 전투 시작 → Combat 범위 초기화 / 사이클 시작 → Cycle 범위 제거
+- 카드 사용 시 → NextCard·NextAttack은 charges 차감 후 소멸(ConsumeOnPlay)
+
+> [의도] 파워카드(지속)와 "다음 카드 강화"(1회용)의 차이 = **범위 + 횟수**뿐.
+>   둘 다 같은 Modifier로 표현 → 새 버프 카드는 데이터만 추가하면 됨(전투 코드 불변).
+
 ## 4. 세 가지 예시가 어떻게 작동하나 (너의 질문 매핑)
 
 ### ① 캐릭터 데미지 상승 버프

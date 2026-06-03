@@ -35,7 +35,7 @@ namespace CarDungeon
 
         // 런 전체 버프/스탯 (CARD_SYSTEM.md). 강화·NPC·유품이 전부 여기로 모임.
         public PlayerState playerState = new();
-        public int MaxHp => MaxPlayerHP + playerState.maxHpBonus;
+        public int MaxHp => MaxPlayerHP + playerState.SumI(ModStat.MaxHpBonus);
 
         // 보스 패턴 2종 (MAGE_PROTOTYPE 4) — 번갈아
         public enum BossPattern { MagicBurst, FireFloor }
@@ -166,8 +166,9 @@ namespace CarDungeon
             // 손패 디스카드 → 5장 드로우 → 코스트 풀회복
             discard.AddRange(hand);
             hand.Clear();
-            cost = MaxCost + playerState.costBonus;          // 버프로 코스트 상한 확장 가능
-            DrawCards(DrawPerCycle + playerState.drawBonus); // 버프로 드로우 증가 가능
+            playerState.ClearScope(ModScope.Cycle);          // 이번 사이클용 버프 만료
+            cost = MaxCost + playerState.SumI(ModStat.CostBonus);          // 버프로 코스트 상한 확장 가능
+            DrawCards(DrawPerCycle + playerState.SumI(ModStat.DrawBonus)); // 버프로 드로우 증가 가능
 
             // [의도] 패턴을 번갈아 → 같은 보스라도 사이클 시간/대응이 달라짐(CORE_COMBAT 축2).
             //   A 마력폭발=긴 사이클(준비 시간) / B 화염장판=짧은 사이클(긴급 회피).
@@ -312,6 +313,15 @@ namespace CarDungeon
 
             if (absorb > 0) barrier += absorb;
             if (draw > 0) DrawCards(draw);
+
+            // [의도] 파워카드/다음카드강화 = 사용 시 PlayerState에 버프 추가 (범위가 소멸 시점 결정).
+            if (c.def.appliesMod != null)
+            {
+                playerState.Add(c.def.appliesMod.Clone());
+                lastLog = $"{c.name} 발동 — {c.def.appliesMod.label} 적용";
+            }
+            // 1회용(다음카드/다음공격) 버프 소비 — 이 카드가 그 버프를 '썼으므로'.
+            playerState.ConsumeOnPlay(c.type == CardType.Attack);
 
             // [의도] 메테오(조준) = 마법사의 '수싸움' 카드. 찍은 자리에 3초 뒤 낙하 →
             //   보스가 그 사이 빠져나가면 헛방. 그래서 냉기폭발(슬로우)로 묶고 쏘는 콤보가 핵심.

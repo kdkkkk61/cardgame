@@ -30,6 +30,9 @@ namespace CarDungeon
         public int drawCount;
         public float slowSeconds;
 
+        // 사용 시 PlayerState에 추가할 버프 (파워카드/다음카드강화 등). null이면 없음.
+        public Modifier appliesMod;
+
         public string desc;
 
         public CardDefinition(string name, CardType type, int cost, float castTime,
@@ -56,6 +59,14 @@ namespace CarDungeon
                 new CardDefinition("신속한 사고", CardType.Skill, 1, 0f, CardShape.Circle, false, "드로우 +2") { drawCount = 2 },
                 new CardDefinition("냉기폭발", CardType.Skill, 2, 1f, CardShape.Square, false, "12 데미지 + 슬로우 2초") { damage = 12, slowSeconds = 2f },
                 new CardDefinition("메테오", CardType.Attack, 3, 3f, CardShape.Square, true, "45 데미지 (광역·조준)") { damage = 45 },
+
+                // ── 데모: 버프 카드 (모디파이어 시스템 검증) ──
+                // 파워카드 = 이 전투 동안 지속
+                new CardDefinition("집중", CardType.Skill, 1, 0f, CardShape.Circle, false, "이 전투 동안 데미지 +50%")
+                    { appliesMod = new Modifier(ModStat.DamageMult, 0.5f, ModScope.Combat, -1, "집중") },
+                // 다음 카드 강화 = 다음 공격 1회만
+                new CardDefinition("예리함", CardType.Skill, 1, 0f, CardShape.Circle, false, "다음 공격 +12 데미지")
+                    { appliesMod = new Modifier(ModStat.DamageFlat, 12f, ModScope.NextAttack, 1, "예리함") },
             };
         }
     }
@@ -85,18 +96,65 @@ namespace CarDungeon
         public string desc => def.desc;
     }
 
+    // ── 모디파이어 시스템 (버프의 단위) ──
+    public enum ModStat { DamageFlat, DamageMult, AbsorbFlat, AbsorbMult, DrawBonus, CostBonus, MaxHpBonus }
+
+    /// <summary>버프의 '지속 범위'. 파워카드=Combat, 다음카드강화=NextCard, 유품=Run 등.</summary>
+    public enum ModScope { Run, Combat, Cycle, NextCard, NextAttack }
+
     /// <summary>
-    /// PlayerState — 런 전체 버프/스탯(가변). 출처(강화/NPC/유품)는 달라도 결과는 여기로 모임.
-    /// [의도] 캐릭터 단위 버프는 전부 여기 한 곳 → 전투는 이 값만 읽으면 됨.
+    /// Modifier — 버프 한 개. "무엇을 / 얼마나 / 얼마나 오래 / 몇 번".
+    /// [의도] 모든 버프(강화·파워카드·다음카드·유품·NPC)를 이 한 단위로 표현 →
+    ///   전투는 종류를 몰라도 됨. 범위(scope)가 소멸 시점을, charges가 1회용 여부를 정함.
+    /// </summary>
+    public class Modifier
+    {
+        public ModStat stat;
+        public float value;
+        public ModScope scope;
+        public int charges;   // -1 = 무제한(범위로만 소멸), N = N번 적용 후 소멸
+        public string label;  // 표시용
+
+        public Modifier(ModStat stat, float value, ModScope scope, int charges = -1, string label = "")
+        { this.stat = stat; this.value = value; this.scope = scope; this.charges = charges; this.label = label; }
+
+        public Modifier Clone() => new Modifier(stat, value, scope, charges, label);
+    }
+
+    /// <summary>
+    /// PlayerState — 런/전투 동안 걸린 모든 모디파이어 목록. 출처(강화/파워카드/유품/NPC) 무관하게 여기로 모임.
+    /// [의도] 전투는 Sum()으로 합산값만 읽음. 범위별 소멸/1회용 소비를 여기서 관리.
     /// </summary>
     public class PlayerState
     {
-        public float damageMult = 1f;   // 모든 공격 데미지 배율
-        public float barrierMult = 1f;  // 흡수(베리어) 배율
-        public int drawBonus = 0;       // 사이클당 드로우 가산
-        public int costBonus = 0;       // 코스트 상한 가산
-        public int maxHpBonus = 0;      // 최대 HP 가산
-        // 향후: grantedAbilities(부여 기술), 유품/각인 효과 리스트 등
+        public readonly List<Modifier> mods = new();
+
+        public void Add(Modifier m) => mods.Add(m);
+
+        /// <summary>해당 스탯의 모든 모디파이어 합.</summary>
+        public float Sum(ModStat s)
+        {
+            float t = 0; foreach (var m in mods) if (m.stat == s) t += m.value; return t;
+        }
+        public int SumI(ModStat s) => Mathf.RoundToInt(Sum(s));
+
+        /// <summary>범위 만료 시 일괄 제거(전투/사이클 시작 등).</summary>
+        public void ClearScope(ModScope sc) => mods.RemoveAll(m => m.scope == sc);
+
+        /// <summary>카드 1장 사용 후 1회용(다음카드/다음공격) 모디파이어 소비.</summary>
+        public void ConsumeOnPlay(bool isAttack)
+        {
+            for (int i = mods.Count - 1; i >= 0; i--)
+            {
+                var m = mods[i];
+                if (m.charges < 0) continue;
+                bool applies = m.scope == ModScope.NextCard
+                    || (m.scope == ModScope.NextAttack && isAttack);
+                if (!applies) continue;
+                m.charges--;
+                if (m.charges <= 0) mods.RemoveAt(i);
+            }
+        }
     }
 
     /// <summary>
@@ -105,17 +163,25 @@ namespace CarDungeon
     /// </summary>
     public static class CardMath
     {
+        // [의도] (기본 + 카드강화 + 플랫버프) × (1 + 배율버프) — 더하기 먼저, 곱하기 나중.
         public static int Damage(CardInstance c, PlayerState ps)
-            => Mathf.Max(0, Mathf.RoundToInt((c.def.damage + c.bonusDamage) * ps.damageMult));
+        {
+            if (c.def.damage <= 0) return 0;
+            float flat = c.def.damage + c.bonusDamage + ps.Sum(ModStat.DamageFlat);
+            float mult = 1f + ps.Sum(ModStat.DamageMult);
+            return Mathf.Max(0, Mathf.RoundToInt(flat * mult));
+        }
 
         public static int Absorb(CardInstance c, PlayerState ps)
-            => Mathf.Max(0, Mathf.RoundToInt((c.def.absorb + c.bonusAbsorb) * ps.barrierMult));
+        {
+            if (c.def.absorb <= 0) return 0;
+            float flat = c.def.absorb + c.bonusAbsorb + ps.Sum(ModStat.AbsorbFlat);
+            float mult = 1f + ps.Sum(ModStat.AbsorbMult);
+            return Mathf.Max(0, Mathf.RoundToInt(flat * mult));
+        }
 
-        public static int DrawCount(CardInstance c)
-            => c.def.drawCount;
-
-        public static float Slow(CardInstance c)
-            => c.def.slowSeconds;
+        public static int DrawCount(CardInstance c) => c.def.drawCount;
+        public static float Slow(CardInstance c) => c.def.slowSeconds;
     }
 
     /// <summary>큐에 등록된 시전중 카드.</summary>
