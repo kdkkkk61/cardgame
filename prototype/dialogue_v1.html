@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NPC 대화·선택 화면 — 정적 목업 v1</title>
+
+<!--
+================================================================================
+  NPC 대화 / 선택 이벤트 — 정적 목업 v1 (로직 없음, 배치만)
+================================================================================
+  출처 문서: META_PROGRESSION.md §5(NPC/?방 양자택일) / CARD_SYSTEM.md(적용 로직) / DUNGEON_MAP.md
+
+  ★ 목적:
+    - 슬더슬식 "이벤트 창 + 선택지" 화면을 눈으로 확정.
+    - 카드 조작(강화/획득/버프)·NPC 능력 부여가 "일어나는 장소"의 UI 뼈대.
+    - 이 화면에서의 선택 = 결국 CardInstance / PlayerState / 동행슬롯을 바꾸는 입력(=적용 로직 호출).
+
+  ★ 이 창이 처리하는 조우 종류 (한 틀로 재사용):
+    - NPC ?방 (양자택일: 동행=액티브 / 축복=패시브)   ← 이 컷의 예시
+    - 카드 보상 (등급 가중치로 N장 → 1장 선택)
+    - 상점 (구매/제거)  · 모닥불 (강화/회복)  · 일반 이벤트(분기 텍스트)
+
+  ★ 화면 대원칙:
+    - 전투 화면 위에 뜨는 "오버레이 패널"(어두운 배경 + 분류색 네온).
+    - 좌: 화자(NPC 초상) / 우: 대사 / 하: 선택지 카드. 선택지는 "효과를 미리 보여줌".
+    - 16:9. screen_v1.html과 같은 팔레트.
+
+  ★ 이 컷의 순간:
+    - ?방에서 "수상한 이방인"을 만남 → 동행(액티브) vs 축복(패시브) vs 떠나기.
+    - META_PROGRESSION §5: 동행=층마다 1회 액티브, 축복=영구 패시브(즉시 확정).
+================================================================================
+-->
+
+<style>
+  :root{
+    --bg:#0d0b12; --panel:#16121d; --panel2:#1b1822; --line:#322b3e;
+    --atk:#e0524d; --skill:#4d8fe0; --power:#e0c24d;
+    --ink:#f2eef7; --ink-dim:#9b94a8;
+    --rare:#4d9bef; --epic:#a866ec; --legend:#f59a33; --common:#8c8c9e;
+    --good:#57c46a; --gold:#e0c24d;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);
+    font-family:"Pretendard","맑은 고딕",system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;padding:24px;gap:16px;}
+
+  /* 16:9 무대 — 전투 위에 뜬 이벤트 오버레이 느낌 */
+  .stage{position:relative;width:min(960px,96vw);aspect-ratio:16/9;
+    background:radial-gradient(120% 90% at 50% 30%,#1c1828 0%,#120f18 80%);
+    border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    box-shadow:0 12px 40px rgba(0,0,0,.5);
+    display:flex;flex-direction:column;}
+
+  /* 어두운 배경 위 분위기용 비네팅 */
+  .stage::before{content:"";position:absolute;inset:0;
+    background:radial-gradient(60% 50% at 50% 40%,transparent 60%,rgba(0,0,0,.45) 100%);
+    pointer-events:none;}
+
+  /*
+    ─── [상단] 이벤트 헤더 ───────────────────────────────────────────
+    의도: 어떤 조우인지 한 줄(아이콘+제목). 방 타입(?방/상점/모닥불)을 색으로 암시.
+  */
+  .ev-head{position:relative;z-index:2;display:flex;align-items:center;gap:10px;
+    padding:14px 18px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(224,194,77,.08),transparent);}
+  .ev-icon{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;
+    font-size:18px;background:#241f2e;border:1px solid #4a3f57;}
+  .ev-title{font-size:16px;font-weight:700;}
+  .ev-sub{font-size:11px;color:var(--ink-dim);margin-left:auto;}
+
+  /*
+    ─── [중단] 화자(초상) + 대사 ──────────────────────────────────────
+    의도: 좌 초상 / 우 대사. 대사는 "분위기·정보"만, 수치는 선택지에 (불완전정보 결).
+          초상은 나중에 AI 일러스트 자리(art-slot). 지금은 도형+이모지 임시.
+  */
+  .ev-body{position:relative;z-index:2;flex:1;display:flex;gap:18px;padding:18px 22px;}
+  .portrait{flex:0 0 150px;display:flex;flex-direction:column;align-items:center;gap:8px;}
+  .portrait .frame{width:130px;height:150px;border-radius:10px;
+    background:radial-gradient(circle at 40% 30%,#3a3350,#1a1622);
+    border:2px solid #5a4f72;display:grid;place-items:center;font-size:54px;
+    box-shadow:0 0 22px rgba(120,90,180,.35);}
+  .portrait .pname{font-size:12px;color:var(--ink-dim);}
+  .portrait .art-tag{font-size:8px;color:#5c5470;}
+
+  .speech{flex:1;display:flex;flex-direction:column;justify-content:center;}
+  .speech .line{font-size:15px;line-height:1.7;color:#e7e1f0;}
+  .speech .line .em{color:var(--power);font-weight:600;}
+  .speech .hint{margin-top:12px;font-size:11px;color:var(--ink-dim);}
+
+  /*
+    ─── [하단] 선택지 ────────────────────────────────────────────────
+    의도(핵심): 선택지는 "효과를 미리 보여주는 카드". 양자택일(동행/축복)+떠나기.
+      - 각 선택지: 제목 + 효과 설명 + 태그(슬롯/영구/비용).
+      - 색으로 결 구분: 동행=스킬파랑(액티브) / 축복=파워노랑(영구) / 떠나기=중립회색.
+      - 선택 불가 조건(슬롯 참/돈 부족 등)은 흐리게 + 사유 표시 (지금은 전부 가능 상태).
+  */
+  .choices{position:relative;z-index:2;display:flex;gap:12px;padding:0 22px 20px;}
+  .choice{flex:1;background:linear-gradient(180deg,var(--panel2),#15111c);
+    border:1px solid var(--line);border-radius:10px;padding:14px;cursor:pointer;
+    display:flex;flex-direction:column;gap:8px;transition:transform .12s,border-color .12s,box-shadow .12s;}
+  .choice:hover{transform:translateY(-4px);border-color:#7a6c95;box-shadow:0 10px 22px rgba(0,0,0,.45);}
+  .choice .c-top{display:flex;align-items:center;gap:8px;}
+  .choice .c-ic{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;font-size:14px;}
+  .choice.accompany .c-ic{background:rgba(77,143,224,.2);border:1px solid var(--skill);}
+  .choice.bless     .c-ic{background:rgba(224,194,77,.2);border:1px solid var(--power);}
+  .choice.leave     .c-ic{background:#241f2e;border:1px solid #4a3f57;}
+  .choice .c-name{font-size:14px;font-weight:700;}
+  .choice .c-eff{font-size:12px;color:#cfc8da;line-height:1.5;}
+  .choice .c-eff b{color:var(--good);}
+  .choice .c-tags{margin-top:auto;display:flex;flex-wrap:wrap;gap:5px;}
+  .tag{font-size:10px;padding:2px 7px;border-radius:10px;background:#241f2e;border:1px solid #4a3f57;color:var(--ink-dim);}
+  .tag.slot{color:var(--skill);border-color:#3a5878;}
+  .tag.perm{color:var(--power);border-color:#6a5d2e;}
+  .tag.warn{color:var(--atk);border-color:#6a3030;}
+
+  /* 화면 밖: 검증 메모 (게임엔 없음) */
+  .memo{width:min(960px,96vw);background:var(--panel);border:1px solid #2e2738;
+    border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.7;color:var(--ink-dim);}
+  .memo h3{color:var(--ink);font-size:13px;margin-bottom:6px;}
+  .memo .tag2{color:#d9b04d;}
+</style>
+</head>
+<body>
+
+  <!-- ====================== 이벤트 화면 (16:9) ====================== -->
+  <div class="stage">
+
+    <!-- [상단] 헤더: 조우 종류 -->
+    <div class="ev-head">
+      <div class="ev-icon">❓</div>
+      <div class="ev-title">수상한 이방인</div>
+      <div class="ev-sub">? 방 · 5층</div>
+    </div>
+
+    <!-- [중단] 초상 + 대사 -->
+    <div class="ev-body">
+      <div class="portrait">
+        <div class="frame" data-art-slot="npc_stranger">🧝</div>
+        <div class="pname">이방인</div>
+        <div class="art-tag">[초상 일러스트]</div>
+      </div>
+      <div class="speech">
+        <div class="line">
+          "여기까지 왔군. 운이 좋거나… 미련하거나.<br>
+          내 <span class="em">힘</span>을 빌려주지. 단, 곁에 둘지 한 번에 받을지는
+          네가 고른다."
+        </div>
+        <div class="hint">▸ 선택은 되돌릴 수 없다. (이 조우는 한 번뿐)</div>
+      </div>
+    </div>
+
+    <!-- [하단] 선택지: 동행(액티브) / 축복(패시브) / 떠나기 -->
+    <div class="choices">
+
+      <!-- 동행 = 액티브 능력(층마다 1회) → 동행 슬롯 차지 -->
+      <div class="choice accompany">
+        <div class="c-top">
+          <div class="c-ic">🤝</div>
+          <div class="c-name">동행 — 곁에 둔다</div>
+        </div>
+        <div class="c-eff">액티브 능력 <b>[드로우 +1]</b><br>층마다 1회, 전투 중 발동하는 비상 버튼.</div>
+        <div class="c-tags">
+          <span class="tag slot">동행 슬롯 1 차지</span>
+          <span class="tag">액티브</span>
+        </div>
+      </div>
+
+      <!-- 축복 = 영구 패시브(즉시 확정) → PlayerState에 Run 범위 모디파이어 -->
+      <div class="choice bless">
+        <div class="c-top">
+          <div class="c-ic">✨</div>
+          <div class="c-name">축복 — 한 번에 받는다</div>
+        </div>
+        <div class="c-eff">영구 패시브 <b>[최대 HP +10]</b><br>즉시 확정, 슬롯을 먹지 않고 계속 쌓인다.</div>
+        <div class="c-tags">
+          <span class="tag perm">영구(런)</span>
+          <span class="tag">패시브</span>
+        </div>
+      </div>
+
+      <!-- 떠나기 = 아무것도 안 받음 -->
+      <div class="choice leave">
+        <div class="c-top">
+          <div class="c-ic">🚪</div>
+          <div class="c-name">떠난다</div>
+        </div>
+        <div class="c-eff">아무것도 받지 않고 길을 간다.</div>
+        <div class="c-tags"><span class="tag">위험 없음</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ====================== 화면 밖: 검증 메모 ====================== -->
+  <div class="memo">
+    <h3>이 화면의 의도 / 적용 연결 (게임엔 없음)</h3>
+    <div>① 선택지 = "효과 미리보기 카드" — 수치는 여기서 명시(대사는 분위기만).</div>
+    <div>② 동행 선택 → 동행 슬롯에 액티브 등록(전투 중 비상버튼). 슬롯 차면 흐리게 비활성.</div>
+    <div>③ 축복 선택 → <b>PlayerState에 Run 범위 Modifier 추가</b>(예: MaxHpBonus +10) = CARD_SYSTEM 적용 로직 호출.</div>
+    <div>④ 같은 틀 재사용: 카드보상(선택지=카드 N장) / 상점(구매·제거) / 모닥불(강화·회복).</div>
+    <div>⑤ 색결: 동행=파랑(액티브) · 축복=노랑(영구) · 떠나기=회색(중립).</div>
+    <div class="tag2">※ 모든 수치·대사 임시 · 다음: 이 틀을 Unity로 구현 + 선택 시 적용 로직 연결</div>
+  </div>
+
+</body>
+</html>
