@@ -85,33 +85,40 @@
         <div class="sec">카드 매물</div>
         <div class="grid">
           <div class="card"><span class="cb atk">1</span><div class="art aoe">💥</div><div class="cn">마력탄</div><div class="price">45 G</div></div>
+          <div class="card"><span class="cb atk">1</span><div class="art single">✨</div><div class="cn">매직미사일</div><div class="price">40 G</div></div>
           <div class="card rare"><span class="cb skill">2</span><div class="art single">🔰</div><div class="cn">마나실드</div><div class="price">75 G</div></div>
+          <div class="card rare"><span class="cb skill">2</span><div class="art aoe">❄️</div><div class="cn">냉기폭발</div><div class="price">80 G</div></div>
+          <div class="card rare"><span class="cb skill">1</span><div class="art single">🗡️</div><div class="cn">예리함</div><div class="price">70 G</div></div>
           <div class="card epic"><span class="cb atk">3</span><div class="art aoe">☄️</div><div class="cn">메테오</div><div class="price cant">150 G</div></div>
-          <div class="card rare sold"><span class="cb skill">2</span><div class="art aoe">❄️</div><div class="cn">냉기폭발</div><div class="price">판매됨</div></div>
+          <div class="card legend"><span class="cb skill">1</span><div class="art single">🔆</div><div class="cn">집중</div><div class="price cant">220 G</div></div>
+          <div class="card sold"><span class="cb atk">2</span><div class="art aoe">⚡</div><div class="cn">체인라이트닝</div><div class="price">판매됨</div></div>
         </div>
 
-        <div class="sec">유품 매물</div>
+        <div class="sec">장비 매물 &nbsp;<span style="color:var(--gold)">— 장비칸 2 / 3 사용중</span></div>
         <div class="relics">
-          <div class="relic"><span class="ri">💍</span><span class="rt">최대 HP +15</span><span class="rp">60 G</span></div>
-          <div class="relic"><span class="ri">📜</span><span class="rt">사이클 시작 드로우 +1</span><span class="rp">110 G</span></div>
+          <div class="relic"><span class="ri">🗡️</span><span class="rt">무기 · 모든 데미지 +10%</span><span class="rp">90 G</span></div>
+          <div class="relic"><span class="ri">🛡️</span><span class="rt">방어구 · 최대 HP +15</span><span class="rp">70 G</span></div>
+          <div class="relic"><span class="ri">📿</span><span class="rt">장신구 · 사이클 드로우 +1</span><span class="rp">120 G</span></div>
         </div>
       </div>
 
       <div class="side">
         <h4>서비스</h4>
-        <div class="svc">🗑️ <b>카드 제거</b><br>덱에서 카드 1장 영구 제거<br><span style="color:var(--gold)">75 G</span> (덱 정제)</div>
+        <div class="svc">🗑️ <b>카드 제거</b><br>덱에서 카드 1장 영구 제거 (덱 정제)<br><span style="color:var(--gold)">75 G</span></div>
         <div class="btn">제거할 카드 고르기 ▸</div>
-        <div class="svc" style="margin-top:auto">💡 상점은 ?방·휴식과 함께 메타 자원 분기.<br>골드는 전투/방 보상에서 수급.</div>
+        <div class="svc" style="font-size:11px;color:var(--ink-dim)">↑ 누르면 <b style="color:var(--ink)">카드 그리드 모달</b>로 전환<br>(card_upgrade 그리드 재사용) → 1장 골라 삭제</div>
+        <div class="svc" style="margin-top:auto">⚠️ 골드 시스템 미구현(TBD).<br>가격 표시는 의도상 배치만.</div>
       </div>
     </div>
   </div>
 
   <div class="memo">
     <h3>의도 (게임엔 없음)</h3>
-    <div>① 카드 매물 = 등급 테두리·가격. 골드 부족하면 가격 흐리게(구매 불가).</div>
-    <div>② 유품 = PlayerState Run 모디파이어(영구). 카드 제거 = 덱에서 CardInstance 삭제(그리드 재사용).</div>
-    <div>③ 골드 수급/가격/리롤 여부는 TBD. 상인 대사는 분위기만.</div>
-    <div class="t">※ 임시 · 카드 그리드 틀은 card_upgrade/card_reward와 공유</div>
+    <div>① 카드 매물 = 여러 장(등급 테두리·가격). 골드 부족 시 가격 흐리게.</div>
+    <div>② <b>장비 = 슬롯 제한</b>(무한 유물 폐기). 무기/방어/장신구, 칸 차면 교체 결정. PlayerState 모디파이어로 적용.</div>
+    <div>③ 카드 제거 = '제거' 버튼 → <b>카드 그리드 모달</b>(card_upgrade 재사용) → 1장 골라 삭제.</div>
+    <div>④ 골드 시스템 미구현(TBD). 가격은 의도 배치만.</div>
+    <div class="t">※ 임시 · 카드 그리드 틀은 card_upgrade/card_reward/제거가 공유</div>
   </div>
 </body>
 </html>
