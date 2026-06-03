@@ -10,7 +10,7 @@ namespace CarDungeon
     /// 카드 등급(레어도). [의도] 타입(뭘 하는가)과 별개 축 — '얼마나 강하고 귀한가'.
     /// 보상·상점 등장 빈도, 파워 예산, 가격을 등급이 결정. 시각=테두리 색.
     /// </summary>
-    public enum Rarity { Common, Uncommon, Rare }
+    public enum Rarity { Common, Rare, Epic, Legendary } // 일반 / 희귀 / 영웅 / 전설
 
     // ============================================================================
     //  CARD_SYSTEM.md 3계층 데이터 모델 + 적용 파이프라인
@@ -57,12 +57,19 @@ namespace CarDungeon
         public Color TypeColor => type == CardType.Attack
             ? new Color(0.86f, 0.27f, 0.27f) : new Color(0.27f, 0.50f, 0.86f);
 
-        /// <summary>등급별 테두리 색 — 일반 회색 / 고급 파랑 / 희귀 금색.</summary>
+        /// <summary>등급별 테두리 색 — 일반 회색 / 희귀 파랑 / 영웅 보라 / 전설 주황.</summary>
         public static Color RarityColor(Rarity r) => r switch
         {
-            Rarity.Uncommon => new Color(0.35f, 0.65f, 0.90f),
-            Rarity.Rare     => new Color(0.90f, 0.75f, 0.30f),
-            _               => new Color(0.55f, 0.55f, 0.62f),
+            Rarity.Rare      => new Color(0.30f, 0.60f, 0.95f),
+            Rarity.Epic      => new Color(0.66f, 0.40f, 0.92f),
+            Rarity.Legendary => new Color(0.96f, 0.60f, 0.20f),
+            _                => new Color(0.55f, 0.55f, 0.62f),
+        };
+
+        /// <summary>등급 한글 이름.</summary>
+        public static string RarityName(Rarity r) => r switch
+        {
+            Rarity.Rare => "희귀", Rarity.Epic => "영웅", Rarity.Legendary => "전설", _ => "일반",
         };
 
         /// <summary>마법사 검증 덱 정의(8종) — MAGE_PROTOTYPE §2.</summary>
@@ -71,21 +78,21 @@ namespace CarDungeon
             return new List<CardDefinition>
             {
                 new CardDefinition("마력탄", CardType.Attack, 1, 1f, CardShape.Square, false, "18 데미지 (광역·자동)") { damage = 18, rarity = Rarity.Common },
-                new CardDefinition("체인라이트닝", CardType.Attack, 2, 1.5f, CardShape.Square, false, "28 데미지 (광역·자동)") { damage = 28, rarity = Rarity.Uncommon },
+                new CardDefinition("체인라이트닝", CardType.Attack, 2, 1.5f, CardShape.Square, false, "28 데미지 (광역·자동)") { damage = 28, rarity = Rarity.Rare },
                 new CardDefinition("매직미사일", CardType.Attack, 1, 0f, CardShape.Circle, false, "12 데미지 (단일·즉발)") { damage = 12, rarity = Rarity.Common },
                 new CardDefinition("베리어", CardType.Skill, 1, 0f, CardShape.Circle, false, "30 흡수 (자기)") { absorb = 30, rarity = Rarity.Common },
-                new CardDefinition("마나실드", CardType.Skill, 2, 0f, CardShape.Circle, false, "60 흡수 (자기)") { absorb = 60, rarity = Rarity.Uncommon },
+                new CardDefinition("마나실드", CardType.Skill, 2, 0f, CardShape.Circle, false, "60 흡수 (자기)") { absorb = 60, rarity = Rarity.Rare },
                 new CardDefinition("신속한 사고", CardType.Skill, 1, 0f, CardShape.Circle, false, "드로우 +2") { drawCount = 2, rarity = Rarity.Common },
-                new CardDefinition("냉기폭발", CardType.Skill, 2, 1f, CardShape.Square, false, "12 데미지 + 슬로우 2초") { damage = 12, slowSeconds = 2f, rarity = Rarity.Uncommon },
-                new CardDefinition("메테오", CardType.Attack, 3, 3f, CardShape.Square, true, "45 데미지 (광역·조준)") { damage = 45, rarity = Rarity.Rare },
+                new CardDefinition("냉기폭발", CardType.Skill, 2, 1f, CardShape.Square, false, "12 데미지 + 슬로우 2초") { damage = 12, slowSeconds = 2f, rarity = Rarity.Rare },
+                new CardDefinition("메테오", CardType.Attack, 3, 3f, CardShape.Square, true, "45 데미지 (광역·조준)") { damage = 45, rarity = Rarity.Epic },
 
                 // ── 데모: 버프 카드 (모디파이어 시스템 검증) ──
                 // 파워카드 = 이 전투 동안 지속 + 소진(한 번만, 무한 스택 방지)
                 new CardDefinition("집중", CardType.Skill, 1, 0f, CardShape.Circle, false, "이 전투 동안 데미지 +50% (소진)")
-                    { appliesMod = new Modifier(ModStat.DamageMult, 0.5f, ModScope.Combat, -1, "집중"), exhaust = true, rarity = Rarity.Rare },
+                    { appliesMod = new Modifier(ModStat.DamageMult, 0.5f, ModScope.Combat, -1, "집중"), exhaust = true, rarity = Rarity.Legendary },
                 // 다음 카드 강화 = 다음 공격 1회만
                 new CardDefinition("예리함", CardType.Skill, 1, 0f, CardShape.Circle, false, "다음 공격 +12 데미지")
-                    { appliesMod = new Modifier(ModStat.DamageFlat, 12f, ModScope.NextAttack, 1, "예리함"), rarity = Rarity.Uncommon },
+                    { appliesMod = new Modifier(ModStat.DamageFlat, 12f, ModScope.NextAttack, 1, "예리함"), rarity = Rarity.Rare },
             };
         }
     }
