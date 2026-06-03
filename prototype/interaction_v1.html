@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>인월드 상호작용 — 하이브리드 목업 v1</title>
+
+<!--
+================================================================================
+  인월드 상호작용(하이브리드) — 정적 목업 v1
+================================================================================
+  출처: META_PROGRESSION §5(NPC ?방) / DUNGEON_MAP(방격자 탐험) / dialogue_v1.html
+
+  ★ 목적: "톱다운 조작화면이 베이스"를 지키면서 상호작용을 어떻게 띄울지 확정.
+    → 씬 전환 없이 전부 '월드 위 오버레이'. 단, 무게에 따라 두 크기로.
+
+  ★ 하이브리드 규칙 (이 컷의 핵심):
+    [가벼움 = 인월드 작은 팝업]  제단(강화)·상인 인사 등. NPC/오브젝트 옆에 앵커.
+        - 화면 거의 안 가림 → 월드 유지. 빠른 1~2선택.
+    [무거움 = 큰 중앙 패널]      리치 NPC 이벤트·상점·카드보상(dialogue_v1.html).
+        - 배경 어둡게 + 초상/서사/여러 선택.
+
+  ★ 공통: 가까이 가면 대상 위에 [E] 프롬프트 → 누르면 위 둘 중 하나가 열림.
+  ★ 이 컷: 제단엔 '작은 팝업'이 열려 있고, NPC엔 'E 프롬프트'만(누르면 큰 패널로).
+================================================================================
+-->
+
+<style>
+  :root{
+    --bg-floor:#1b1822; --bg-floor2:#241f2e;
+    --line:#322b3e; --ink:#f2eef7; --ink-dim:#9b94a8;
+    --skill:#4d8fe0; --power:#e0c24d; --good:#57c46a; --aim:#54d6d0;
+    --npc:#b9a3e8; --altar:#e0c24d;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#0d0b12;color:var(--ink);
+    font-family:"Pretendard","맑은 고딕",system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;padding:24px;gap:14px;}
+
+  /* 16:9 톱다운 방 (코어키퍼식 바닥격자) */
+  .stage{position:relative;width:min(960px,96vw);aspect-ratio:16/9;
+    background:radial-gradient(120% 90% at 50% 40%,var(--bg-floor2),var(--bg-floor) 70%,#120f18);
+    border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    box-shadow:0 12px 40px rgba(0,0,0,.5);
+    background-image:
+      radial-gradient(120% 90% at 50% 40%,var(--bg-floor2),var(--bg-floor) 70%,#120f18),
+      repeating-linear-gradient(0deg,transparent 0 47px,rgba(255,255,255,.02) 47px 48px),
+      repeating-linear-gradient(90deg,transparent 0 47px,rgba(255,255,255,.02) 47px 48px);}
+
+  /* 월드 오브젝트 공통 */
+  .obj{position:absolute;display:grid;place-items:center;}
+  .obj .body{border-radius:50%;display:grid;place-items:center;}
+  .obj .tag{position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);
+    font-size:10px;color:var(--ink-dim);white-space:nowrap;}
+
+  /* 플레이어 */
+  .player{left:46%;top:58%;}
+  .player .body{width:42px;height:42px;background:radial-gradient(circle at 35% 30%,#b9a3e8,#6b4fb0);
+    border:2px solid #d9ccff;box-shadow:0 0 16px rgba(150,110,230,.5);}
+
+  /* NPC (오른쪽 위) — 가까이 안 가서 'E 프롬프트'만 */
+  .npc{left:70%;top:30%;}
+  .npc .body{width:46px;height:46px;background:radial-gradient(circle at 40% 30%,#3a3350,#1a1622);
+    border:2px solid var(--npc);font-size:24px;box-shadow:0 0 16px rgba(120,90,180,.4);}
+
+  /* 제단 (왼쪽) — 사각 오브젝트, 작은 팝업이 열려 있음 */
+  .altar{left:24%;top:34%;}
+  .altar .body{width:46px;height:46px;border-radius:8px;
+    background:radial-gradient(circle at 40% 30%,#5a4e2a,#2a2410);
+    border:2px solid var(--altar);font-size:22px;box-shadow:0 0 18px rgba(224,194,77,.4);}
+
+  /* [E] 상호작용 프롬프트 (대상 위에 떠오름) */
+  .prompt{position:absolute;top:-30px;left:50%;transform:translateX(-50%);
+    display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink);
+    background:rgba(13,11,18,.85);border:1px solid #4a3f57;border-radius:14px;padding:3px 9px;white-space:nowrap;}
+  .key{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:4px;
+    background:#2a2230;border:1px solid #6a5d7d;font-size:10px;font-weight:700;}
+
+  /*
+    ─── 작은 인월드 팝업 (가벼운 상호작용 = 제단 강화) ─────────────────
+    의도: 화면 거의 안 가리고 대상 옆에 앵커. 대사 없음, 즉시 행동.
+          제단 = "카드 1장 골라 강화" 같은 1~2선택. 톱다운 유지의 핵심.
+  */
+  .inworld{position:absolute;left:calc(24% + 40px);top:18%;width:230px;
+    background:rgba(20,16,26,.95);border:1px solid #5a4f2e;border-radius:10px;
+    padding:10px 11px;box-shadow:0 8px 22px rgba(0,0,0,.5);z-index:5;}
+  .inworld::before{content:"";position:absolute;left:-7px;top:60px;
+    border:7px solid transparent;border-right-color:#5a4f2e;}
+  .inworld .iw-title{font-size:12px;font-weight:700;color:var(--altar);margin-bottom:2px;}
+  .inworld .iw-sub{font-size:10px;color:var(--ink-dim);margin-bottom:8px;}
+  .iw-cards{display:flex;gap:6px;margin-bottom:8px;}
+  .iw-card{flex:1;height:64px;border-radius:7px;background:linear-gradient(180deg,#2b2433,#201a28);
+    border:1px solid #4a3f57;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;font-size:10px;cursor:pointer;}
+  .iw-card.sel{border-color:var(--power);box-shadow:0 0 0 1px var(--power) inset;}
+  .iw-card .up{color:var(--good);font-size:9px;}
+  .iw-row{display:flex;gap:6px;}
+  .iw-btn{flex:1;text-align:center;font-size:11px;padding:5px;border-radius:6px;cursor:pointer;}
+  .iw-btn.ok{background:rgba(87,196,106,.18);border:1px solid var(--good);color:#bfe9c6;}
+  .iw-btn.no{background:#241f2e;border:1px solid #4a3f57;color:var(--ink-dim);}
+
+  /* 우상단 미니 안내 */
+  .legend{position:absolute;right:12px;top:12px;background:rgba(14,11,18,.7);
+    border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:10px;color:var(--ink-dim);line-height:1.6;}
+  .legend b{color:var(--ink);}
+
+  .memo{width:min(960px,96vw);background:#16121d;border:1px solid #2e2738;border-radius:8px;
+    padding:12px 14px;font-size:12px;line-height:1.7;color:var(--ink-dim);}
+  .memo h3{color:var(--ink);font-size:13px;margin-bottom:6px;}
+  .memo .t{color:#d9b04d;}
+</style>
+</head>
+<body>
+
+  <div class="stage">
+
+    <!-- 우상단 안내 -->
+    <div class="legend">
+      <b>하이브리드</b><br>
+      가벼움 → 인월드 작은 팝업<br>
+      무거움 → 큰 중앙 패널
+    </div>
+
+    <!-- 제단 (왼쪽) + 작은 인월드 팝업 열림 -->
+    <div class="obj altar">
+      <div class="body">🔨</div>
+      <div class="tag">제단</div>
+    </div>
+    <div class="inworld">
+      <div class="iw-title">🔨 제단 — 카드 강화</div>
+      <div class="iw-sub">한 장을 골라 영구 강화 (대화 없음)</div>
+      <div class="iw-cards">
+        <div class="iw-card sel">마력탄<span class="up">18→24</span></div>
+        <div class="iw-card">베리어<span class="up">30→40</span></div>
+      </div>
+      <div class="iw-row">
+        <div class="iw-btn ok">강화 [E]</div>
+        <div class="iw-btn no">취소</div>
+      </div>
+    </div>
+
+    <!-- NPC (오른쪽 위) — 멀어서 프롬프트만. 누르면 큰 패널(dialogue_v1) -->
+    <div class="obj npc">
+      <div class="prompt"><span class="key">E</span> 대화</div>
+      <div class="body">🧝</div>
+      <div class="tag">이방인 (NPC)</div>
+    </div>
+
+    <!-- 플레이어 -->
+    <div class="obj player">
+      <div class="body"></div>
+      <div class="tag">내 캐릭터</div>
+    </div>
+
+  </div>
+
+  <div class="memo">
+    <h3>하이브리드 규칙 / 의도 (게임엔 없음)</h3>
+    <div>① <b>씬 전환 없음</b> — 전부 톱다운 월드 위 오버레이. 베이스 화면 유지.</div>
+    <div>② <b>가벼운 상호작용</b>(제단 강화·상인 인사) = 대상 옆 작은 팝업, 대사 없음, 1~2선택.</div>
+    <div>③ <b>무거운 상호작용</b>(리치 NPC·상점·카드보상) = 큰 중앙 패널 + 배경 어둡게 (dialogue_v1.html).</div>
+    <div>④ 공통: 근접 시 대상 위 <span class="t">[E] 프롬프트</span> → 누르면 둘 중 하나 열림.</div>
+    <div>⑤ 제단 강화 = CardInstance에 +강화 / NPC 축복 = PlayerState 모디파이어 (CARD_SYSTEM 적용 로직).</div>
+    <div class="t">※ 임시 배치 · 다음: 어느 케이스를 작은 팝업/큰 패널로 둘지 목록화 → Unity 구현</div>
+  </div>
+
+</body>
+</html>
