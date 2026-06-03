@@ -49,17 +49,41 @@ namespace CarDungeon
             }
 
             var kb = Keyboard.current;
+            var ms = Mouse.current;
+            var cam = Camera.main;
+
+            // 조준 모드: 마우스로 낙하지점 지정 → 좌클릭 확정 / 우클릭·Esc 취소
+            if (mgr.IsAiming && ms != null && cam != null)
+            {
+                Vector2 sp = ms.position.ReadValue();
+                Vector3 wp = cam.ScreenToWorldPoint(new Vector3(sp.x, sp.y, -cam.transform.position.z));
+                mgr.aimPos = new Vector2(wp.x, wp.y);
+                if (ms.leftButton.wasPressedThisFrame) mgr.ConfirmAim(mgr.aimPos);
+                else if (ms.rightButton.wasPressedThisFrame ||
+                         (kb != null && kb.escapeKey.wasPressedThisFrame)) mgr.CancelAim();
+            }
+
             if (kb != null && mgr.state == CombatState.Fighting)
             {
-                if (kb.digit1Key.wasPressedThisFrame) mgr.PlayCard(0);
-                if (kb.digit2Key.wasPressedThisFrame) mgr.PlayCard(1);
-                if (kb.digit3Key.wasPressedThisFrame) mgr.PlayCard(2);
-                if (kb.digit4Key.wasPressedThisFrame) mgr.PlayCard(3);
-                if (kb.digit5Key.wasPressedThisFrame) mgr.PlayCard(4);
+                if (!mgr.IsAiming)
+                {
+                    if (kb.digit1Key.wasPressedThisFrame) mgr.PlayCard(0);
+                    if (kb.digit2Key.wasPressedThisFrame) mgr.PlayCard(1);
+                    if (kb.digit3Key.wasPressedThisFrame) mgr.PlayCard(2);
+                    if (kb.digit4Key.wasPressedThisFrame) mgr.PlayCard(3);
+                    if (kb.digit5Key.wasPressedThisFrame) mgr.PlayCard(4);
+                }
+                if (kb.zKey.wasPressedThisFrame) mgr.CycleSlowMode();           // 슬로우 실험 전환
+                if (kb.xKey.wasPressedThisFrame && mgr.boss != null)            // 보스 이동 전환
+                    mgr.boss.moveMode = mgr.boss.moveMode == Boss.MoveMode.Chase
+                        ? Boss.MoveMode.Stationary : Boss.MoveMode.Chase;
             }
             if (kb != null && mgr.state != CombatState.Fighting && kb.rKey.wasPressedThisFrame)
+            {
+                Time.timeScale = 1f;
                 UnityEngine.SceneManagement.SceneManager.LoadScene(
                     UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+            }
         }
 
         void EnsureSubscribed()
@@ -99,6 +123,7 @@ namespace CarDungeon
             EnsureStyles();
             float W = Screen.width, H = Screen.height;
 
+            DrawFieldZones();         // 전장: 화염 장판 / 메테오 조준 영역
             DrawAutoHitTelegraph();   // 전장: 자동명중 확정타 링 (캐릭터 둘레)
             DrawHpPanel();            // 좌상단
             DrawBossCluster(W);       // 상단 중앙
@@ -108,14 +133,61 @@ namespace CarDungeon
             DrawHand(W, H);           // 하단 중앙 (부채꼴)
             DrawDeckArea(W, H);       // 하단 우
             DrawFX();                 // 데미지 숫자 / 시전 펄스
+            DrawToggles(W, H);        // 슬로우/보스이동 실험 토글
             DrawLog(W, H);
             DrawResult(W, H);
+        }
+
+        // ── 전장 영역: 화염 장판(빨강) / 메테오 조준(청록) ──
+        void DrawFieldZones()
+        {
+            var cam = Camera.main; if (cam == null) return;
+
+            // 화염 장판 (패턴 B 예고) — 영역 밖으로 무빙
+            if (mgr.pattern == CombatManager.BossPattern.FireFloor && mgr.state == CombatState.Fighting)
+                DrawWorldCircle(cam, mgr.aoeCenter, mgr.aoeRadius,
+                    new Color(0.878f, 0.322f, 0.302f, 0.22f), new Color(0.878f, 0.322f, 0.302f, 0.9f));
+
+            // 큐에 있는 메테오들의 낙하 지점
+            foreach (var e in mgr.queue)
+                if (e.aimed)
+                    DrawWorldCircle(cam, e.targetPos, CombatManager.MeteorRadius,
+                        new Color(0.329f, 0.839f, 0.816f, 0.18f), new Color(0.329f, 0.839f, 0.816f, 0.9f));
+
+            // 조준 중 레티클
+            if (mgr.IsAiming)
+                DrawWorldCircle(cam, mgr.aimPos, CombatManager.MeteorRadius,
+                    new Color(0.329f, 0.839f, 0.816f, 0.25f), new Color(0.329f, 0.839f, 0.816f, 1f));
+        }
+
+        void DrawWorldCircle(Camera cam, Vector2 worldCenter, float worldRadius, Color fill, Color line)
+        {
+            Vector3 c = cam.WorldToScreenPoint(worldCenter);
+            Vector3 edge = cam.WorldToScreenPoint(worldCenter + Vector2.right * worldRadius);
+            float pr = Mathf.Abs(edge.x - c.x);
+            float y = Screen.height - c.y;
+            var r = new Rect(c.x - pr, y - pr, pr * 2, pr * 2);
+            DrawTex(r, Tex.Circle(), fill);
+            DrawTex(r, Tex.Ring(), line);
+        }
+
+        // ── 실험 토글 상태 (슬로우 A/B/C/D · 보스 이동) ──
+        void DrawToggles(float W, float H)
+        {
+            string[] slow = { "A 시간+2초", "B 슬로우50%", "C 일시정지", "D 없음" };
+            string sm = slow[(int)mgr.slowMode];
+            string bm = mgr.boss != null && mgr.boss.moveMode == Boss.MoveMode.Chase ? "추적" : "정주";
+            string aim = mgr.IsAiming ? "   |   조준 중: 좌클릭=낙하 / 우클릭=취소" : "";
+            GUI.Label(new Rect(W / 2 - 280, H - 20, 560, 18),
+                $"[Z] 조준슬로우: <color=#54d6d0>{sm}</color>    [X] 보스이동: <color=#b9a3e8>{bm}</color>{aim}",
+                new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter });
         }
 
         // ── 자동명중 확정타 텔레그래프: 공격 임박 시 캐릭터 둘레 빨간 링 ──
         void DrawAutoHitTelegraph()
         {
             if (mgr.state != CombatState.Fighting || mgr.player == null) return;
+            if (mgr.pattern != CombatManager.BossPattern.MagicBurst) return; // 자동명중일 때만
             if (mgr.cycleTimer > 3.5f) return; // 임박할 때만
             var cam = Camera.main; if (cam == null) return;
             Vector3 sp = cam.WorldToScreenPoint(mgr.player.transform.position);
@@ -325,8 +397,8 @@ namespace CarDungeon
             if (c.aimed)
                 DrawTex(new Rect(badge.x - 4, badge.y - 4, bs + 8, bs + 8), Tex.Ring(), C_aim);
 
-            // 클릭
-            if (GUI.Button(rect, GUIContent.none, GUIStyle.none) && playable)
+            // 클릭 (조준 중엔 카드 입력 차단)
+            if (!mgr.IsAiming && GUI.Button(rect, GUIContent.none, GUIStyle.none) && playable)
                 mgr.PlayCard(index);
 
             GUI.matrix = m;

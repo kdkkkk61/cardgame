@@ -33,8 +33,26 @@ namespace CarDungeon
         public List<CardData> discard = new();
         public List<CastEntry> queue = new();
 
-        // 보스 패턴 A(자동명중) — Slice 1 유일 패턴
-        public int pendingBossDamage = 25;
+        // 보스 패턴 2종 (MAGE_PROTOTYPE 4) — 번갈아
+        public enum BossPattern { MagicBurst, FireFloor }
+        public BossPattern pattern = BossPattern.MagicBurst;
+        public const int MagicBurstDmg = 25;  // 자동명중 (베리어 흡수)
+        public const int FireFloorDmg = 35;   // 회피가능 (무빙으로 피함)
+        public const float MagicBurstTime = 10f;
+        public const float FireFloorTime = 8f;
+        public Vector2 aoeCenter;             // 화염 장판 중심
+        public float aoeRadius = 2.2f;
+
+        // 메테오 조준 (MAGE_PROTOTYPE 5)
+        public const float MeteorRadius = 1.6f;
+        public bool IsAiming;
+        public Vector2 aimPos;
+        CardData _aimCard;
+
+        // 슬로우 A/B/C/D 실험
+        public enum SlowMode { A_AddTime, B_Slow, C_Pause, D_None }
+        public SlowMode slowMode = SlowMode.B_Slow;
+        public const float AimAddTime = 2f;
 
         public PlayerController player;
         public Boss boss;
@@ -49,9 +67,12 @@ namespace CarDungeon
         {
             this.player = player;
             this.boss = boss;
+            if (boss != null && player != null) boss.target = player.transform;
+            Time.timeScale = 1f; // 조준 슬로우 잔여 방지
             playerHP = MaxPlayerHP;
             deck = CardData.BuildPrototypeDeck();
             Shuffle(deck);
+            pattern = BossPattern.FireFloor; // StartCycle에서 토글 → 첫 패턴 MagicBurst
             StartCycle();
         }
 
@@ -65,7 +86,7 @@ namespace CarDungeon
                 queue[i].remaining -= Time.deltaTime;
                 if (queue[i].remaining <= 0f)
                 {
-                    ResolveCard(queue[i].card);
+                    ResolveEntry(queue[i]);
                     queue.RemoveAt(i);
                 }
             }
@@ -87,19 +108,45 @@ namespace CarDungeon
             hand.Clear();
             cost = MaxCost;
             DrawCards(DrawPerCycle);
-            cycleLength = BaseCycleTime;
+
+            // 패턴 번갈아 (사이클 시간 가변 — CORE_COMBAT 축2)
+            pattern = pattern == BossPattern.MagicBurst
+                ? BossPattern.FireFloor : BossPattern.MagicBurst;
+            if (pattern == BossPattern.MagicBurst)
+                cycleLength = MagicBurstTime;
+            else
+            {
+                cycleLength = FireFloorTime;
+                // 화염 장판: 플레이어 현재 위치를 노림 → 무빙으로 이탈해야 함
+                aoeCenter = player != null ? (Vector2)player.transform.position : Vector2.zero;
+            }
             cycleTimer = cycleLength;
         }
 
         void EndCycle()
         {
-            // 패턴 A: 자동명중 — 베리어로 흡수 후 잔여만 HP 피해
-            int dmg = pendingBossDamage;
-            int absorbed = Mathf.Min(barrier, dmg);
-            barrier -= absorbed;
-            int taken = dmg - absorbed;
-            playerHP = Mathf.Max(0, playerHP - taken);
-            lastLog = $"보스 마력폭발! {dmg} (흡수 {absorbed} / 피해 {taken})";
+            if (pattern == BossPattern.MagicBurst)
+            {
+                // 자동명중 — 베리어로 흡수 후 잔여만 HP 피해
+                int dmg = MagicBurstDmg;
+                int absorbed = Mathf.Min(barrier, dmg);
+                barrier -= absorbed;
+                int taken = dmg - absorbed;
+                playerHP = Mathf.Max(0, playerHP - taken);
+                lastLog = $"마력폭발! {dmg} (흡수 {absorbed} / 피해 {taken})";
+            }
+            else
+            {
+                // 회피가능 — 영역 안이면 풀피해, 무빙으로 이탈하면 0 (베리어 무관)
+                bool inside = player != null &&
+                    ((Vector2)player.transform.position - aoeCenter).sqrMagnitude <= aoeRadius * aoeRadius;
+                if (inside)
+                {
+                    playerHP = Mathf.Max(0, playerHP - FireFloorDmg);
+                    lastLog = $"화염 장판 적중! -{FireFloorDmg} (영역 못 벗어남)";
+                }
+                else lastLog = "화염 장판 회피 성공!";
+            }
 
             barrier = 0; // 사이클 종료 시 베리어 소멸
             // 큐에 남은 장기 시전은 다음 사이클로 침범(유지)
@@ -137,20 +184,87 @@ namespace CarDungeon
             var c = hand[handIndex];
             if (!CanPlay(c)) return;
 
+            if (c.aimed) { BeginAim(handIndex); return; } // 조준 카드는 위치 지정 먼저
+
             cost -= c.cost;
             hand.RemoveAt(handIndex);
             onCardCast?.Invoke();        // 시전 손맛 피드백
 
             if (c.castTime <= 0f)
-                ResolveCard(c);          // 즉발
+                ResolveEntry(new CastEntry(c)); // 즉발
             else
-                queue.Add(new CastEntry(c)); // 시전 등록
+                queue.Add(new CastEntry(c));    // 시전 등록
         }
 
-        void ResolveCard(CardData c)
+        // --- 메테오 조준 ---
+        public void BeginAim(int handIndex)
         {
+            if (IsAiming) return;
+            var c = hand[handIndex];
+            if (!CanPlay(c)) return;
+            IsAiming = true; _aimCard = c;
+            if (player != null) player.movementLocked = true; // 조준 중 무빙 불가
+            switch (slowMode)
+            {
+                case SlowMode.A_AddTime: cycleTimer += AimAddTime; break;
+                case SlowMode.B_Slow: Time.timeScale = 0.5f; break;
+                case SlowMode.C_Pause: Time.timeScale = 0f; break;
+                case SlowMode.D_None: break;
+            }
+        }
+
+        public void ConfirmAim(Vector2 worldPos)
+        {
+            if (!IsAiming) return;
+            int idx = hand.IndexOf(_aimCard);
+            EndAimState();
+            if (idx < 0) return;
+            cost -= _aimCard.cost;
+            hand.RemoveAt(idx);
+            onCardCast?.Invoke();
+            var e = new CastEntry(_aimCard) { targetPos = worldPos };
+            queue.Add(e);
+        }
+
+        public void CancelAim() { if (IsAiming) EndAimState(); }
+
+        void EndAimState()
+        {
+            IsAiming = false;
+            Time.timeScale = 1f;
+            if (player != null) player.movementLocked = false;
+        }
+
+        public void CycleSlowMode()
+        {
+            slowMode = (SlowMode)(((int)slowMode + 1) % 4);
+        }
+
+        void ResolveEntry(CastEntry e)
+        {
+            var c = e.card;
             if (c.absorb > 0) barrier += c.absorb;
             if (c.drawCount > 0) DrawCards(c.drawCount);
+
+            if (c.aimed) // 메테오 — 조준 지점에 낙하, 보스가 그 안에 있어야 명중
+            {
+                int dmg = c.damage;
+                Vector3 from = new Vector3(e.targetPos.x, e.targetPos.y + 6f, 0);
+                Projectile.Spawn(from, e.targetPos, new Color(1f, 0.6f, 0.3f), 20f, () =>
+                {
+                    if (boss == null) return;
+                    bool hit = ((Vector2)boss.transform.position - e.targetPos).sqrMagnitude
+                        <= MeteorRadius * MeteorRadius;
+                    if (hit)
+                    {
+                        boss.TakeDamage(dmg); boss.Flash(); onDamageDealt?.Invoke(dmg);
+                        lastLog = $"메테오 명중! -{dmg}";
+                    }
+                    else lastLog = "메테오 헛방 (보스가 빠져나감)";
+                });
+                discard.Add(c);
+                return;
+            }
 
             if (c.damage > 0 && boss != null)
             {
@@ -159,7 +273,6 @@ namespace CarDungeon
                 Vector3 from = player != null ? player.transform.position : Vector3.zero;
                 Color col = c.type == CardType.Attack
                     ? new Color(1f, 0.55f, 0.45f) : new Color(0.55f, 0.82f, 1f);
-                // 투사체 도달 시 데미지/슬로우/플래시 적용 (낙하감)
                 Projectile.Spawn(from, boss.transform.position, col, 16f, () =>
                 {
                     if (boss == null) return;
@@ -182,12 +295,19 @@ namespace CarDungeon
             else if (playerHP <= 0) { state = CombatState.Lost; lastLog = "쓰러졌다... 패배"; }
         }
 
-        // 사이클 종료 시 받을 피해 미리보기(베리어 반영) — HP 바 표시용
+        // 사이클 종료 시 받을 피해 미리보기 — HP 바 표시용
         public int PreviewIncoming()
         {
-            int dmg = pendingBossDamage;
-            int absorbed = Mathf.Min(barrier, dmg);
-            return dmg - absorbed;
+            if (pattern == BossPattern.MagicBurst)
+            {
+                // 자동명중: 베리어가 흡수
+                int absorbed = Mathf.Min(barrier, MagicBurstDmg);
+                return MagicBurstDmg - absorbed;
+            }
+            // 화염 장판: 지금 영역 안이면 풀피해 예고, 벗어나 있으면 0 (베리어 무관)
+            bool inside = player != null &&
+                ((Vector2)player.transform.position - aoeCenter).sqrMagnitude <= aoeRadius * aoeRadius;
+            return inside ? FireFloorDmg : 0;
         }
 
         static void Shuffle<T>(List<T> list)

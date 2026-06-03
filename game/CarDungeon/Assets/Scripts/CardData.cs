@@ -75,11 +75,14 @@ namespace CarDungeon
         public CardData card;
         public float remaining;
         public float total;
+        public Vector2 targetPos;  // 조준 카드(메테오) 낙하 지점
+        public bool aimed;
         public CastEntry(CardData card)
         {
             this.card = card;
             this.total = card.castTime;
             this.remaining = card.castTime;
+            this.aimed = card.aimed;
         }
     }
 }
