@@ -243,6 +243,14 @@
           마법사는 병렬 → 여러 개가 각자 타이머. 가독성이 검증 포인트.
           여기선 메테오(3초,60%)+체인라이트닝(1.5초,30%) 2개가 동시에 도는 컷.
   */
+  /* 동행 NPC 액티브 = 전투당 1회 비상 버튼 (핸드/덱과 별개 안전망 — META §5) */
+  .companion { position: absolute; left: 16px; bottom: 128px; display: flex; gap: 6px; }
+  .comp-skill { display: flex; align-items: center; gap: 7px; background: rgba(20,16,26,.82);
+    border: 1px solid #6a5d3a; border-radius: 8px; padding: 5px 9px; cursor: pointer; }
+  .comp-skill .ci { font-size: 17px; }
+  .comp-skill .ct { font-size: 10px; color: var(--ink); line-height: 1.3; }
+  .comp-skill .cu { color: var(--power); }
+  .comp-skill.used { opacity: .4; }
   .queue { position: absolute; left: 16px; bottom: 86px; display: flex; flex-direction: column; gap: 4px; }
   .queue-title { font-size: 8px; color: var(--ink-dim); }
   .cast {
@@ -433,6 +441,14 @@
       <div class="combat-relics" title="보유 유물 (호버=툴팁)">
         <span class="cr">🗡️</span><span class="cr">🛡️</span><span class="cr">📿</span><span class="cr">💍</span>
         <span class="crn">유물 4/7</span>
+      </div>
+    </div>
+
+    <!-- 동행 NPC 스킬: 전투당 1회 발동(비상 버튼). 핸드 망조 대비 안전망. -->
+    <div class="companion">
+      <div class="comp-skill">
+        <span class="ci">🤝</span>
+        <span class="ct">동행 · 신속한 지원<br><span class="cu">3드로우 +3코스트 · 전투 1회</span></span>
       </div>
     </div>
 
