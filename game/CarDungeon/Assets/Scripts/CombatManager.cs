@@ -31,6 +31,7 @@ namespace CarDungeon
         public List<CardInstance> deck = new();
         public List<CardInstance> hand = new();
         public List<CardInstance> discard = new();
+        public List<CardInstance> exhausted = new(); // 소진 더미 (이번 전투엔 안 돌아옴)
         public List<CastEntry> queue = new();
 
         // 런 전체 버프/스탯 (CARD_SYSTEM.md). 강화·NPC·유품이 전부 여기로 모임.
@@ -341,7 +342,7 @@ namespace CarDungeon
                     }
                     else lastLog = "메테오 헛방 (보스가 빠져나감)";
                 });
-                discard.Add(c);
+                Retire(c);
                 return;
             }
 
@@ -363,7 +364,15 @@ namespace CarDungeon
             {
                 boss.ApplySlow(slow);
             }
-            discard.Add(c);
+            Retire(c);
+        }
+
+        // [의도] 사용 끝난 카드 정리: 소진 카드는 '소진 더미'로(이번 전투 재등장 X),
+        //   일반 카드는 무덤으로(덱 소진 시 다시 셔플돼 재드로우). 파워카드 무한스택 방지의 핵심.
+        void Retire(CardInstance c)
+        {
+            if (c.def.exhaust) exhausted.Add(c);
+            else discard.Add(c);
         }
 
         void CheckWinLose()

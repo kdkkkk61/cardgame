@@ -442,6 +442,10 @@ namespace CarDungeon
                 $"덱 {mgr.deck.Count}", new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter });
             GUI.Label(new Rect(pile.x, pile.y + 40, pile.width, 16),
                 $"무덤 {mgr.discard.Count}", new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter });
+            if (mgr.exhausted.Count > 0)
+                GUI.Label(new Rect(pile.x - 40, pile.y + 56, pile.width + 40, 16),
+                    $"소진 {mgr.exhausted.Count}", new GUIStyle(_dim) {
+                        alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(0.55f, 0.5f, 0.6f) } });
         }
 
         void SortHand(int mode)

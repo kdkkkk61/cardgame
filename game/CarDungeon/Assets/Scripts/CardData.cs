@@ -33,6 +33,10 @@ namespace CarDungeon
         // 사용 시 PlayerState에 추가할 버프 (파워카드/다음카드강화 등). null이면 없음.
         public Modifier appliesMod;
 
+        // [의도] 소진(exhaust): 사용 시 무덤이 아닌 '소진 더미'로 → 이번 전투엔 다시 안 나옴.
+        //   지속 파워카드(전투 내내 버프)는 반드시 true. 안 그러면 재드로우→무한 스택.
+        public bool exhaust;
+
         public string desc;
 
         public CardDefinition(string name, CardType type, int cost, float castTime,
@@ -61,9 +65,9 @@ namespace CarDungeon
                 new CardDefinition("메테오", CardType.Attack, 3, 3f, CardShape.Square, true, "45 데미지 (광역·조준)") { damage = 45 },
 
                 // ── 데모: 버프 카드 (모디파이어 시스템 검증) ──
-                // 파워카드 = 이 전투 동안 지속
-                new CardDefinition("집중", CardType.Skill, 1, 0f, CardShape.Circle, false, "이 전투 동안 데미지 +50%")
-                    { appliesMod = new Modifier(ModStat.DamageMult, 0.5f, ModScope.Combat, -1, "집중") },
+                // 파워카드 = 이 전투 동안 지속 + 소진(한 번만, 무한 스택 방지)
+                new CardDefinition("집중", CardType.Skill, 1, 0f, CardShape.Circle, false, "이 전투 동안 데미지 +50% (소진)")
+                    { appliesMod = new Modifier(ModStat.DamageMult, 0.5f, ModScope.Combat, -1, "집중"), exhaust = true },
                 // 다음 카드 강화 = 다음 공격 1회만
                 new CardDefinition("예리함", CardType.Skill, 1, 0f, CardShape.Circle, false, "다음 공격 +12 데미지")
                     { appliesMod = new Modifier(ModStat.DamageFlat, 12f, ModScope.NextAttack, 1, "예리함") },
