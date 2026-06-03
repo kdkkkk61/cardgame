@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>상점 화면 — 정적 목업 v1</title>
+<!--
+================================================================================
+  상점 — 정적 목업 v1
+================================================================================
+  출처: META_PROGRESSION(유품/상점) / CARD_SYSTEM(등급·획득) / interaction_v1(진입)
+  ★ 흐름: 상점방 → 상인 NPC에게 [E] → 이 화면(오버레이). 골드로 구매/카드 제거.
+  ★ 구성: 상인 인사 / 골드 / 카드 매물(등급 테두리·가격) / 유품 매물 / 카드 제거 서비스 / 나가기.
+  ★ 재사용: 카드 그리드 틀(card_upgrade)과 동일 카드 표기. 가격만 추가.
+================================================================================
+-->
+<style>
+  :root{--bg:#0d0b12;--panel:#16121d;--panel2:#1b1822;--line:#322b3e;
+    --atk:#e0524d;--skill:#4d8fe0;--ink:#f2eef7;--ink-dim:#9b94a8;
+    --common:#8c8c9e;--rare:#4d9bef;--epic:#a866ec;--legend:#f59a33;--gold:#e0c24d;--good:#57c46a;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:"Pretendard","맑은 고딕",system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;padding:20px;gap:14px;}
+  .stage{position:relative;width:min(980px,96vw);aspect-ratio:16/9;
+    background:linear-gradient(180deg,#1a1622,#100d16);border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.55);display:flex;flex-direction:column;}
+  .head{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(224,194,77,.07),transparent);}
+  .head .pf{width:34px;height:34px;border-radius:8px;background:radial-gradient(circle at 40% 30%,#4a3f24,#241f10);
+    border:1px solid var(--gold);display:grid;place-items:center;font-size:18px;}
+  .head .ttl{font-size:15px;font-weight:700;}
+  .head .say{font-size:11px;color:var(--ink-dim);margin-left:6px;}
+  .gold{margin-left:auto;font-size:14px;font-weight:700;color:var(--gold);}
+  .close{font-size:11px;color:var(--ink-dim);border:1px solid #4a3f57;border-radius:6px;padding:4px 9px;margin-left:12px;cursor:pointer;}
+
+  .content{flex:1;display:flex;min-height:0;}
+  .left{flex:1;padding:14px 16px;overflow:auto;}
+  .sec{font-size:11px;color:var(--ink-dim);margin:2px 0 8px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:12px;margin-bottom:14px;}
+  .card{position:relative;height:140px;border-radius:10px;background:linear-gradient(180deg,#2b2433,#201a28);
+    border:2px solid var(--common);padding:8px 6px 6px;cursor:pointer;display:flex;flex-direction:column;
+    align-items:center;gap:4px;transition:transform .1s;}
+  .card:hover{transform:translateY(-3px);}
+  .card.rare{border-color:var(--rare);}.card.epic{border-color:var(--epic);}.card.legend{border-color:var(--legend);}
+  .card.sold{opacity:.35;cursor:default;}
+  .cb{position:absolute;top:-8px;left:-8px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+    font-size:11px;font-weight:800;color:#fff;border:2px solid #fff3;}
+  .cb.atk{background:var(--atk);}.cb.skill{background:var(--skill);}
+  .art{margin-top:6px;width:42px;height:42px;display:grid;place-items:center;font-size:20px;background:#15111c;border:2px solid #6a5d7d;}
+  .art.single{border-radius:50%;}.art.aoe{border-radius:6px;}
+  .cn{font-size:10px;font-weight:600;}
+  .price{margin-top:auto;font-size:11px;font-weight:700;color:var(--gold);}
+  .price.cant{color:var(--ink-dim);}
+
+  /* 유품(작은 칩) */
+  .relics{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
+  .relic{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid #4a3f57;border-radius:9px;
+    padding:7px 10px;cursor:pointer;}
+  .relic .ri{font-size:18px;}
+  .relic .rt{font-size:11px;} .relic .rp{font-size:11px;font-weight:700;color:var(--gold);margin-left:4px;}
+
+  /* 우: 카드 제거 서비스 */
+  .side{flex:0 0 200px;border-left:1px solid var(--line);padding:16px 14px;display:flex;flex-direction:column;gap:10px;background:rgba(0,0,0,.15);}
+  .side h4{font-size:12px;color:var(--ink-dim);}
+  .svc{background:var(--panel2);border:1px solid #4a3f57;border-radius:9px;padding:12px;font-size:12px;line-height:1.5;}
+  .svc b{color:var(--good);}
+  .btn{text-align:center;font-size:12px;padding:9px;border-radius:8px;cursor:pointer;
+    background:#241f2e;border:1px solid #4a3f57;color:var(--ink);}
+
+  .memo{width:min(980px,96vw);background:var(--panel);border:1px solid #2e2738;border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.7;color:var(--ink-dim);}
+  .memo h3{color:var(--ink);font-size:13px;margin-bottom:6px;}.memo .t{color:#d9b04d;}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="head">
+      <div class="pf">🧌</div>
+      <div class="ttl">상점</div>
+      <div class="say">"골드만 있으면 다 팔지."</div>
+      <div class="gold">🪙 120 G</div>
+      <div class="close">✕ 나가기</div>
+    </div>
+
+    <div class="content">
+      <div class="left">
+        <div class="sec">카드 매물</div>
+        <div class="grid">
+          <div class="card"><span class="cb atk">1</span><div class="art aoe">💥</div><div class="cn">마력탄</div><div class="price">45 G</div></div>
+          <div class="card rare"><span class="cb skill">2</span><div class="art single">🔰</div><div class="cn">마나실드</div><div class="price">75 G</div></div>
+          <div class="card epic"><span class="cb atk">3</span><div class="art aoe">☄️</div><div class="cn">메테오</div><div class="price cant">150 G</div></div>
+          <div class="card rare sold"><span class="cb skill">2</span><div class="art aoe">❄️</div><div class="cn">냉기폭발</div><div class="price">판매됨</div></div>
+        </div>
+
+        <div class="sec">유품 매물</div>
+        <div class="relics">
+          <div class="relic"><span class="ri">💍</span><span class="rt">최대 HP +15</span><span class="rp">60 G</span></div>
+          <div class="relic"><span class="ri">📜</span><span class="rt">사이클 시작 드로우 +1</span><span class="rp">110 G</span></div>
+        </div>
+      </div>
+
+      <div class="side">
+        <h4>서비스</h4>
+        <div class="svc">🗑️ <b>카드 제거</b><br>덱에서 카드 1장 영구 제거<br><span style="color:var(--gold)">75 G</span> (덱 정제)</div>
+        <div class="btn">제거할 카드 고르기 ▸</div>
+        <div class="svc" style="margin-top:auto">💡 상점은 ?방·휴식과 함께 메타 자원 분기.<br>골드는 전투/방 보상에서 수급.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="memo">
+    <h3>의도 (게임엔 없음)</h3>
+    <div>① 카드 매물 = 등급 테두리·가격. 골드 부족하면 가격 흐리게(구매 불가).</div>
+    <div>② 유품 = PlayerState Run 모디파이어(영구). 카드 제거 = 덱에서 CardInstance 삭제(그리드 재사용).</div>
+    <div>③ 골드 수급/가격/리롤 여부는 TBD. 상인 대사는 분위기만.</div>
+    <div class="t">※ 임시 · 카드 그리드 틀은 card_upgrade/card_reward와 공유</div>
+  </div>
+</body>
+</html>

@@ -87,6 +87,11 @@
   .speech .line{font-size:15px;line-height:1.7;color:#e7e1f0;}
   .speech .line .em{color:var(--power);font-weight:600;}
   .speech .hint{margin-top:12px;font-size:11px;color:var(--ink-dim);}
+  /* 다단계 대화: 진행 점 + 계속 표시 (마지막 단계에서 선택지 등장) */
+  .steps{margin-top:14px;display:flex;align-items:center;gap:6px;}
+  .steps .dot{width:7px;height:7px;border-radius:50%;background:#3a3144;}
+  .steps .dot.on{background:var(--power);}
+  .steps .cont{margin-left:8px;font-size:11px;color:var(--power);}
 
   /*
     ─── [하단] 선택지 ────────────────────────────────────────────────
@@ -147,6 +152,11 @@
           네가 고른다."
         </div>
         <div class="hint">▸ 선택은 되돌릴 수 없다. (이 조우는 한 번뿐)</div>
+        <!-- 다단계 대화: 대사 여러 컷 넘긴 뒤 마지막에 선택지 등장. 지금은 3컷 중 3컷째(선택 단계) -->
+        <div class="steps">
+          <span class="dot"></span><span class="dot"></span><span class="dot on"></span>
+          <span class="cont">선택 단계</span>
+        </div>
       </div>
     </div>
 

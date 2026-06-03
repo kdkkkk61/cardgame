@@ -99,6 +99,19 @@
   .iw-btn.ok{background:rgba(87,196,106,.18);border:1px solid var(--good);color:#bfe9c6;}
   .iw-btn.no{background:#241f2e;border:1px solid #4a3f57;color:var(--ink-dim);}
 
+  /* 문 (방 가장자리) — 색·크기로 종류 구분 */
+  .door{position:absolute;display:grid;place-items:center;font-size:10px;color:var(--ink);}
+  .door .d{border-radius:4px;}
+  .door .dl{position:absolute;font-size:9px;color:var(--ink-dim);white-space:nowrap;}
+  /* 열린 문 = 크고 밝게 */
+  .door.open .d{width:54px;height:14px;background:#3a4a3d;border:2px solid var(--good);box-shadow:0 0 10px rgba(87,196,106,.4);}
+  /* 잠긴 문 = 작고 어둡게 + 자물쇠 */
+  .door.lock .d{width:40px;height:12px;background:#241f2e;border:2px solid #5a4a4a;}
+  /* 보스 문 = 빨강, 큼 */
+  .door.boss .d{width:60px;height:16px;background:#3a1f24;border:2px solid var(--atk);box-shadow:0 0 12px rgba(224,82,77,.45);}
+  /* 비밀 문 = 안갯속(거의 안 보임) */
+  .door.secret .d{width:36px;height:12px;background:#191520;border:1px dashed #3a3144;opacity:.5;}
+
   /* 우상단 미니 안내 */
   .legend{position:absolute;right:12px;top:12px;background:rgba(14,11,18,.7);
     border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:10px;color:var(--ink-dim);line-height:1.6;}
@@ -113,6 +126,20 @@
 <body>
 
   <div class="stage">
+
+    <!-- 문 (가장자리, 종류별 색·크기) -->
+    <div class="door open"   style="left:6px;top:46%;">
+      <div class="d" style="width:14px;height:54px;"></div><div class="dl" style="left:20px;top:18px;">열린 문</div>
+    </div>
+    <div class="door boss"   style="left:50%;top:6px;transform:translateX(-50%);">
+      <div class="d"></div><div class="dl" style="top:20px;left:50%;transform:translateX(-50%);">보스 문</div>
+    </div>
+    <div class="door lock"   style="right:6px;top:46%;">
+      <div class="d" style="width:12px;height:40px;"></div><div class="dl" style="right:18px;top:14px;">🔒 잠김(엘리트 전투중)</div>
+    </div>
+    <div class="door secret" style="left:62%;bottom:6px;">
+      <div class="d"></div><div class="dl" style="top:16px;">비밀(발견 전)</div>
+    </div>
 
     <!-- 우상단 안내 -->
     <div class="legend">

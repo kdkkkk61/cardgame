@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>카드 보상 화면 — 정적 목업 v1</title>
+<!--
+================================================================================
+  카드 보상 — 정적 목업 v1
+================================================================================
+  출처: CARD_SYSTEM(등급 가중치) / META_PROGRESSION
+  ★ 흐름: 전투 승리 → 이 화면(오버레이). 등급 가중치로 뽑힌 카드 3장 중 1장 획득(또는 건너뛰기).
+  ★ 핵심: 등급 가중치(일60/희28/영9/전3)가 여기서 작동. 큰 카드로 보여주고 효과 명시.
+================================================================================
+-->
+<style>
+  :root{--bg:#0d0b12;--panel:#16121d;--line:#322b3e;--atk:#e0524d;--skill:#4d8fe0;
+    --ink:#f2eef7;--ink-dim:#9b94a8;--common:#8c8c9e;--rare:#4d9bef;--epic:#a866ec;--legend:#f59a33;--good:#57c46a;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:"Pretendard","맑은 고딕",system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;padding:20px;gap:14px;}
+  .stage{position:relative;width:min(980px,96vw);aspect-ratio:16/9;
+    background:radial-gradient(120% 90% at 50% 30%,#1c1828,#100d16);border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.55);display:flex;flex-direction:column;align-items:center;}
+  .ttl{margin-top:26px;font-size:18px;font-weight:700;}
+  .sub{font-size:11px;color:var(--ink-dim);margin-top:4px;}
+  .row{flex:1;display:flex;align-items:center;justify-content:center;gap:24px;}
+
+  .card{position:relative;width:150px;height:210px;border-radius:14px;
+    background:linear-gradient(180deg,#2b2433,#201a28);border:2px solid var(--common);
+    padding:12px 10px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;
+    transition:transform .12s,box-shadow .12s;}
+  .card:hover{transform:translateY(-8px);box-shadow:0 14px 30px rgba(0,0,0,.55);}
+  .card.rare{border-color:var(--rare);}.card.epic{border-color:var(--epic);}.card.legend{border-color:var(--legend);}
+  .cb{position:absolute;top:-10px;left:-10px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+    font-size:15px;font-weight:800;color:#fff;border:2px solid #fff3;}
+  .cb.atk{background:var(--atk);}.cb.skill{background:var(--skill);}
+  .grade{position:absolute;top:-9px;right:-6px;font-size:9px;font-weight:800;color:#10101a;border-radius:9px;padding:1px 7px;}
+  .grade.common{background:var(--common);}.grade.rare{background:var(--rare);}.grade.epic{background:var(--epic);}.grade.legend{background:var(--legend);}
+  .art{margin-top:12px;width:66px;height:66px;display:grid;place-items:center;font-size:30px;background:#15111c;border:2px solid #6a5d7d;}
+  .art.single{border-radius:50%;}.art.aoe{border-radius:8px;}
+  .cn{font-size:14px;font-weight:700;}
+  .ce{font-size:11px;color:var(--ink-dim);text-align:center;line-height:1.4;}
+
+  .skip{margin:0 0 22px;font-size:12px;color:var(--ink-dim);border:1px solid #4a3f57;border-radius:8px;padding:8px 16px;cursor:pointer;}
+  .memo{width:min(980px,96vw);background:var(--panel);border:1px solid #2e2738;border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.7;color:var(--ink-dim);}
+  .memo h3{color:var(--ink);font-size:13px;margin-bottom:6px;}.memo .t{color:#d9b04d;}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="ttl">전투 보상 — 카드 획득</div>
+    <div class="sub">한 장을 골라 덱에 추가 (등급 가중치로 추첨됨)</div>
+    <div class="row">
+      <div class="card">
+        <span class="cb atk">1</span><span class="grade common">일반</span>
+        <div class="art aoe">💥</div><div class="cn">마력탄</div>
+        <div class="ce">광역 18 데미지<br>1초 시전</div>
+      </div>
+      <div class="card rare">
+        <span class="cb skill">2</span><span class="grade rare">희귀</span>
+        <div class="art aoe">❄️</div><div class="cn">냉기폭발</div>
+        <div class="ce">광역 12 + 슬로우 2초<br>(메테오 셋업)</div>
+      </div>
+      <div class="card epic">
+        <span class="cb atk">3</span><span class="grade epic">영웅</span>
+        <div class="art aoe">☄️</div><div class="cn">메테오</div>
+        <div class="ce">조준 광역 45<br>3초 시전</div>
+      </div>
+    </div>
+    <div class="skip">건너뛰기 (안 받음)</div>
+  </div>
+
+  <div class="memo">
+    <h3>의도 (게임엔 없음)</h3>
+    <div>① 3장 = 등급 가중치(일60/희28/영9/전3)로 추첨. 좋은 카드가 같이 나오면 행복한 고민.</div>
+    <div>② 선택 → 덱에 CardInstance 추가. 건너뛰기 = 덱 비대화 방지(슬더슬 결).</div>
+    <div>③ 카드 표기는 손패와 동일(색=타입, 원/네모, 등급 테두리). 보상은 큰 카드로.</div>
+    <div class="t">※ 임시 · 카드 수(3장)·리롤·골드 대체 여부 TBD</div>
+  </div>
+</body>
+</html>
