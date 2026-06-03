@@ -69,8 +69,9 @@ namespace CarDungeon
                 invulnTimer -= Time.deltaTime;
                 if (_sr != null)
                 {
-                    float a = 0.35f + 0.4f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 30f));
-                    _sr.color = new Color(_baseColor.r, _baseColor.g, _baseColor.b, a);
+                    // 또렷한 on/off 깜빡임 (초당 ~10회)
+                    bool on = (Mathf.FloorToInt(Time.unscaledTime * 10f) % 2) == 0;
+                    _sr.color = new Color(_baseColor.r, _baseColor.g, _baseColor.b, on ? 1f : 0.2f);
                 }
             }
             else if (_sr != null && _sr.color.a != 1f)

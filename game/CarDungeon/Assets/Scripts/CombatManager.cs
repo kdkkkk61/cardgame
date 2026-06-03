@@ -52,7 +52,7 @@ namespace CarDungeon
         // 조준 슬로우(B 확정) — 지속/세기 튜닝용 프리셋 비교 (Z로 전환)
         public static readonly float[] AimSlowDur   = { 0.7f, 0.5f, 0.7f, 0.5f };
         public static readonly float[] AimSlowScale = { 0.5f, 0.5f, 0.7f, 0.7f }; // 화면 속도 비율
-        public int aimPreset = 0;
+        public int aimPreset = 2;   // 기본 0.7s @ 속도 70%
         public const float AimMoveScale = 0.4f;     // 조준 중 저속 이동 배율
         float _aimSlowTimer = 0f;
 
@@ -107,16 +107,29 @@ namespace CarDungeon
                 }
             }
 
-            // 보스 접촉 데미지 (무적 아닐 때만 + 넉백)
-            if (boss != null && player != null && !player.IsInvuln)
+            // 보스-플레이어 충돌 처리 (겹침 금지 + 접촉 데미지)
+            if (boss != null && player != null)
             {
                 Vector2 pp = player.transform.position, bp = boss.transform.position;
-                if ((pp - bp).sqrMagnitude <= ContactRadius * ContactRadius)
+                Vector2 d = pp - bp;
+                float dist = d.magnitude;
+                if (dist < ContactRadius)
                 {
-                    playerHP = Mathf.Max(0, playerHP - ContactDamage);
-                    player.HitReact(pp - bp, ContactKnockback, ContactInvuln);
-                    onPlayerHit?.Invoke();
-                    lastLog = $"보스와 충돌! -{ContactDamage}";
+                    // 1) 겹침 분리: 플레이어를 보스 밖으로 밀어냄 (절대 안 겹침)
+                    Vector2 dir = dist > 0.0001f ? d / dist : Vector2.up;
+                    Vector3 np = player.transform.position + (Vector3)(dir * (ContactRadius - dist));
+                    np.x = Mathf.Clamp(np.x, -player.arenaHalf.x, player.arenaHalf.x);
+                    np.y = Mathf.Clamp(np.y, -player.arenaHalf.y, player.arenaHalf.y);
+                    player.transform.position = np;
+
+                    // 2) 접촉 데미지 (무적 아닐 때만 + 넉백)
+                    if (!player.IsInvuln)
+                    {
+                        playerHP = Mathf.Max(0, playerHP - ContactDamage);
+                        player.HitReact(dir, ContactKnockback, ContactInvuln);
+                        onPlayerHit?.Invoke();
+                        lastLog = $"보스와 충돌! -{ContactDamage}";
+                    }
                 }
             }
 
