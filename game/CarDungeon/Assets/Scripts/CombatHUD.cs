@@ -283,17 +283,22 @@ namespace CarDungeon
                 GUIUtility.RotateAroundPivot(rot, new Vector2(cx, cy + h));
 
             bool playable = mgr.CanPlay(c);
-            // 카드 바탕
-            DrawTex(rect, Tex.Round(), new Color(0.169f, 0.141f, 0.200f, playable ? 0.98f : 0.7f));
-            DrawTexBorder(rect, hover ? new Color(0.541f, 0.478f, 0.651f) : new Color(0.290f, 0.247f, 0.341f));
+            // 카드 바탕 (둥근 사각 + AA)
+            DrawRound(rect, new Color(0.169f, 0.141f, 0.200f, playable ? 0.98f : 0.7f),
+                hover ? new Color(0.541f, 0.478f, 0.651f) : new Color(0.290f, 0.247f, 0.341f));
 
             // 일러스트 슬롯 (모양 = 정보축)
             float artS = 50 * scale;
             var art = new Rect(cx - artS / 2, rect.y + 18 * scale, artS, artS);
-            DrawTex(art, c.shape == CardShape.Circle ? Tex.Circle() : Tex.Round(),
-                new Color(0.082f, 0.067f, 0.110f));
-            DrawTexBorder(art, new Color(0.416f, 0.365f, 0.490f),
-                c.shape == CardShape.Circle);
+            if (c.shape == CardShape.Circle)
+            {
+                DrawTex(art, Tex.Circle(), new Color(0.082f, 0.067f, 0.110f));
+                DrawTexBorder(art, new Color(0.416f, 0.365f, 0.490f), true);
+            }
+            else
+            {
+                DrawRound(art, new Color(0.082f, 0.067f, 0.110f), new Color(0.416f, 0.365f, 0.490f));
+            }
             GUI.Label(art, c.shape == CardShape.Circle ? "단일" : "광역",
                 new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(10 * scale) });
 
@@ -343,8 +348,7 @@ namespace CarDungeon
                 if (GUI.Button(r, new GUIContent("", tip[i]), GUIStyle.none)) SortHand(i);
             }
             var pile = new Rect(x, y + 28, 54, 70);
-            DrawTex(pile, Tex.Round(), new Color(0.169f, 0.141f, 0.200f));
-            DrawTexBorder(pile, new Color(0.290f, 0.247f, 0.341f));
+            DrawRound(pile, new Color(0.169f, 0.141f, 0.200f), new Color(0.290f, 0.247f, 0.341f));
             GUI.Label(new Rect(pile.x, pile.y + 18, pile.width, 20),
                 $"덱 {mgr.deck.Count}", new GUIStyle(_dim) { alignment = TextAnchor.MiddleCenter });
             GUI.Label(new Rect(pile.x, pile.y + 40, pile.width, 16),
@@ -416,6 +420,26 @@ namespace CarDungeon
             var old = GUI.color; GUI.color = c;
             GUI.DrawTexture(r, t); GUI.color = old;
         }
+
+        // 9-슬라이스 둥근 사각: 어느 크기·각도에서도 코너가 매끈 (AA)
+        static GUIStyle _fillStyle, _lineStyle;
+        static void EnsureSlice()
+        {
+            if (_fillStyle != null) return;
+            int b = Tex.RoundRadius;
+            _fillStyle = new GUIStyle { border = new RectOffset(b, b, b, b) };
+            _fillStyle.normal.background = Tex.RoundFill();
+            _lineStyle = new GUIStyle { border = new RectOffset(b, b, b, b) };
+            _lineStyle.normal.background = Tex.RoundLine();
+        }
+        static void DrawRound(Rect r, Color fill, Color border)
+        {
+            EnsureSlice();
+            var old = GUI.color;
+            GUI.color = fill; GUI.Box(r, GUIContent.none, _fillStyle);
+            GUI.color = border; GUI.Box(r, GUIContent.none, _lineStyle);
+            GUI.color = old;
+        }
         static void DrawTexBorder(Rect r, Color c, bool circle = false)
         {
             var old = GUI.color; GUI.color = c;
@@ -477,6 +501,30 @@ namespace CarDungeon
         {
             if (_round == null) _round = Solid(1, Color.white);
             return _round;
+        }
+
+        // 9-슬라이스용 둥근 사각 (안티앨리어싱). border = 코너 반지름(10)
+        static Texture2D _rFill, _rLine;
+        public const int RoundRadius = 10;
+        public static Texture2D RoundFill() { if (_rFill == null) _rFill = MakeRound(false); return _rFill; }
+        public static Texture2D RoundLine() { if (_rLine == null) _rLine = MakeRound(true); return _rLine; }
+        static Texture2D MakeRound(bool outline)
+        {
+            int s = 40; float r = RoundRadius, half = s / 2f;
+            var t = new Texture2D(s, s, TextureFormat.RGBA32, false);
+            for (int y = 0; y < s; y++)
+            for (int x = 0; x < s; x++)
+            {
+                float px = Mathf.Abs(x - half + 0.5f) - (half - r);
+                float py = Mathf.Abs(y - half + 0.5f) - (half - r);
+                float dx = Mathf.Max(px, 0), dy = Mathf.Max(py, 0);
+                float d = Mathf.Sqrt(dx * dx + dy * dy) - r;   // 라운드렉트 SDF
+                float a = outline
+                    ? Mathf.Clamp01(1.5f - Mathf.Abs(d))        // ~외곽선 띠
+                    : Mathf.Clamp01(0.5f - d);                  // 채움(코너 AA)
+                t.SetPixel(x, y, new Color(1, 1, 1, a));
+            }
+            t.Apply(); return t;
         }
         public static Texture2D Hatch()  // 베리어 빗금
         {
